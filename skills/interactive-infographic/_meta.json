@@ -1,0 +1,12 @@
+{
+  "slug": "contextweave-diagrams",
+  "version": "0.1.0",
+  "openclaw": {
+    "emoji": "🧠",
+    "requires": {
+      "bins": ["node"],
+      "env": ["CONTEXTWEAVE_MCP_API_KEY", "CONTEXTWEAVE_API_URL"]
+    },
+    "primaryEnv": "CONTEXTWEAVE_MCP_API_KEY"
+  }
+}
