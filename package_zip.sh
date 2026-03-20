@@ -2,8 +2,9 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SKILL_DIR="$ROOT_DIR/contextweave-diagrams"
-PACKAGE_NAME="${1:-contextweave-diagrams.zip}"
+SKILL_NAME="${1:-interactive-architecture-diagram}"
+SKILL_DIR="$ROOT_DIR/skills/$SKILL_NAME"
+PACKAGE_NAME="${SKILL_NAME}.zip"
 OUTPUT_PATH="$ROOT_DIR/$PACKAGE_NAME"
 
 if [ ! -d "$SKILL_DIR" ]; then
@@ -15,8 +16,8 @@ if [ -f "$OUTPUT_PATH" ]; then
   rm -f "$OUTPUT_PATH"
 fi
 
-cd "$ROOT_DIR"
-zip -r "$OUTPUT_PATH" "contextweave-diagrams" \
+cd "$ROOT_DIR/skills"
+zip -r "$OUTPUT_PATH" "$SKILL_NAME" \
   -x "*.git*" \
   -x "*/__pycache__/*" \
   -x "*/__pycache__/" \
