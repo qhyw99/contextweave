@@ -1,2 +1,0 @@
-CONTEXTWEAVE_MCP_API_KEY_VALUE="your-contextweave-mcp-api-key"
-CONTEXTWEAVE_EDITOR_PROTOCOL_VALUE="trae"
