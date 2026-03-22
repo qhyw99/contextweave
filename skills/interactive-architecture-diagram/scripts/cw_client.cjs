@@ -7,7 +7,7 @@ const { URL } = require("url");
 
 class CWClient {
   constructor() {
-    const baseUrl = process.env.CONTEXTWEAVE_API_URL || "https://abcd.bpjwmsdb.com";
+    const baseUrl = process.env.CONTEXTWEAVE_API_URL || "https://pptx.chenxitech.site";
     this.baseUrl = baseUrl ? baseUrl.replace(/\/+$/, "") : "";
     this.timeoutMs = 3000000;
     this.apiKey = this.loadApiKey();
@@ -37,7 +37,7 @@ class CWClient {
     if (!["http:", "https:"].includes(parsed.protocol)) {
       return this.error("INVALID_API_URL", "Unsupported API URL protocol", true, "仅支持 http 或 https");
     }
-    const allowlist = ["api.contextweave.site", "contextweave.site", "abcd.bpjwmsdb.com", "bpjwmsdb.com"];
+    const allowlist = ["api.contextweave.site", "contextweave.site", "pptx.chenxitech.site", "bpjwmsdb.com"];
     const host = parsed.hostname.toLowerCase();
     const trusted = allowlist.some((allowed) => host === allowed || host.endsWith(`.${allowed}`));
     if (!trusted) {

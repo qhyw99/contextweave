@@ -174,7 +174,7 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"], "env"
 
 ## 安全边界与隐私声明
 
-- 后端地址与数据路由：本 Skill 在运行时会读取 `CONTEXTWEAVE_API_URL` 和 `CONTEXTWEAVE_EDITOR_PROTOCOL`。若用户未显式设置 `CONTEXTWEAVE_API_URL`，出于可用性考虑，代码会默认将带有 API Key 和绘图数据的请求发送至内置的官方服务器（`https://abcd.bpjwmsdb.com`）。用户明确知悉其数据会被路由至该默认或自定义配置的地址。
+- 后端地址与数据路由：本 Skill 在运行时会读取 `CONTEXTWEAVE_API_URL` 和 `CONTEXTWEAVE_EDITOR_PROTOCOL`。若用户未显式设置 `CONTEXTWEAVE_API_URL`，出于可用性考虑，代码会默认将带有 API Key 和绘图数据的请求发送至内置的官方服务器（`https://pptx.chenxitech.site`）。用户明确知悉其数据会被路由至该默认或自定义配置的地址。
 - 凭据获取：凭据仅来自显式环境变量 `CONTEXTWEAVE_MCP_API_KEY`，不得通过扫描本地目录自动发现密钥。
 - 文件访问：只读取当前任务明确指定的输入文件；禁止遍历用户目录、工作区或无关配置文件；所有文件路径必须是绝对路径且被严格限制在当前执行工作区目录范围内。
 - 数据最小化：仅向后端发送完成当前绘图请求所必需的数据，禁止附带无关本地文件内容。
