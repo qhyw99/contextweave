@@ -4,8 +4,7 @@
   "openclaw": {
     "emoji": "🧠",
     "requires": {
-      "bins": ["node"],
-      "env": ["CONTEXTWEAVE_MCP_API_KEY", "CONTEXTWEAVE_API_URL", "CONTEXTWEAVE_EDITOR_PROTOCOL"]
+      "bins": ["node"]
     },
     "primaryEnv": "CONTEXTWEAVE_MCP_API_KEY"
   }

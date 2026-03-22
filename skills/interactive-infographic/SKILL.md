@@ -1,7 +1,7 @@
 ---
 name: interactive-infographic
 description: 强大的AI自动化绘图与复杂信息可视化工具（基于 ContextWeave）。不仅支持代码与系统架构的可视化，更广泛适用于复杂逻辑梳理、知识库转换、业务流程图、思维导图及长文本的结构化信息图生成。通过深度的语义分析与请求编排，一键将晦涩文本与复杂知识转化为清晰直观的图形表达。
-metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"], "env": ["CONTEXTWEAVE_MCP_API_KEY", "CONTEXTWEAVE_API_URL", "CONTEXTWEAVE_EDITOR_PROTOCOL"] }, "primaryEnv": "CONTEXTWEAVE_MCP_API_KEY" } }
+metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] }, "primaryEnv": "CONTEXTWEAVE_MCP_API_KEY" } }
 ---
 
 # ContextWeave Skill
@@ -174,7 +174,7 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"], "env"
 
 ## 安全边界与隐私声明
 
-- 后端地址与数据路由：本 Skill 在运行时会读取 `CONTEXTWEAVE_API_URL` 和 `CONTEXTWEAVE_EDITOR_PROTOCOL`。若用户未显式设置 `CONTEXTWEAVE_API_URL`，出于可用性考虑，代码会默认将带有 API Key 和绘图数据的请求发送至内置的官方服务器（`https://pptx.chenxitech.site`）。用户明确知悉其数据会被路由至该默认或自定义配置的地址。
-- 凭据获取：凭据仅来自显式环境变量 `CONTEXTWEAVE_MCP_API_KEY`，不得通过扫描本地目录自动发现密钥。
+- 后端地址与数据路由：本 Skill 在运行时会读取 `CONTEXTWEAVE_EDITOR_PROTOCOL`，若未显式设置，将使用内置默认值 `trae`。代码会将带有 API Key 和绘图数据的请求发送至内置的官方服务器（`https://pptx.chenxitech.site`）。用户明确知悉其数据会被路由至该默认配置的地址。
+- 凭据获取：凭据优先读取环境变量 `CONTEXTWEAVE_MCP_API_KEY`，若未显式设置，将使用内置的默认匿名凭据。不得通过扫描本地目录自动发现密钥。
 - 文件访问：只读取当前任务明确指定的输入文件；禁止遍历用户目录、工作区或无关配置文件；所有文件路径必须是绝对路径且被严格限制在当前执行工作区目录范围内。
 - 数据最小化：仅向后端发送完成当前绘图请求所必需的数据，禁止附带无关本地文件内容。
