@@ -72,7 +72,8 @@ class CWClient {
     }
     const normalized = path.resolve(targetPath);
     const cwd = process.cwd();
-    if (normalized !== cwd && !normalized.startsWith(cwd + path.sep)) {
+    const relative = path.relative(cwd, normalized);
+    if (relative === '..' || relative.startsWith('..' + path.sep) || path.isAbsolute(relative)) {
       return this.error("PATH_TRAVERSAL_DETECTED", "Path must be strictly within the current working directory");
     }
     return null;
