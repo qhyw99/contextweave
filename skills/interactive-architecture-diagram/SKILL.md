@@ -99,6 +99,7 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] }, "pr
 ## 执行优先级规则
 
 - 默认只走“请求编排为文件后，基于文件生成”这一种执行形式
+- **特殊场景（导入已有文件）**：当用户在输入中明确提供了现成的绘图文件（如 `.cw`）并要求导入或绘图时，**禁止**重新生成结构化意图文件或调用 `generate_contextweave.cjs`，也**禁止**仅以文本形式输出命令，必须直接使用工具调用 `node scripts/import_contextweave_code.cjs --path "<绝对文件路径>"` 进行导入。
 - 禁止只给语义分析或方案文本而不发起脚本调用
 - 若脚本失败，先按错误策略重试；仅在重试后仍失败时，输出失败原因与下一步操作建议
 - 路径应使用可移植定位：优先基于 Skill 根目录执行 `scripts/...`，避免依赖宿主固定绝对路径
@@ -116,6 +117,7 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] }, "pr
 ## 意图到命令模板
 
 - 请求编排：将结构化意图组织为文件后，向后端发起调用 - 基于文件生成：`node scripts/generate_contextweave.cjs --input_file "<绝对文件路径>"`
+- 导入已有文件：当用户提供 `.cw` 等现成文件时，直接调用：`node scripts/import_contextweave_code.cjs --path "<绝对文件路径>"`
 
 ## 参数约束与回填规则
 
@@ -156,6 +158,7 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] }, "pr
 ## 脚本能力映射
 
 - `scripts/generate_contextweave.cjs`：用于基于 `input_file` 执行生成；输出包含可复用的 `session_id`
+- `scripts/import_contextweave_code.cjs`：用于导入现有的 `.cw` 设计文件，使用 `--path "<文件路径>"` 传入
 - `scripts/cw_client.cjs`：用于统一后端请求与响应适配；承载鉴权、错误归一和返回结构解析
 
 ## 错误策略
