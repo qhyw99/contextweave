@@ -152,7 +152,7 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] }, "pr
 - 完整执行顺序：生成结构化内容 → 写文件 → 校验路径绝对性与文件存在 → 执行脚本 → 解析 JSON → 输出回填
 - 成功输出至少包含：`script`、`input_file`、`status`、`session_id`、关键产物字段，且 `input_file` 必须是实际存在路径
 - 失败输出至少包含：`script`、`input_file`、`status:error`、`error.code`、`error.message`
-- **默认代码落盘行为**：在执行 `generate_contextweave.cjs` 和 `edit_contextweave.cjs` 成功后，脚本会自动将后端返回的最新 `cw_code` 保存为当前执行路径下的 `diagram.cw` 文件，省去了用户手动导出的繁琐步骤。
+- **默认代码落盘行为**：在执行 `generate_contextweave.cjs` 和 `edit_contextweave.cjs` 成功后，脚本会自动将后端返回的最新 `cw_code` 保存为当前执行路径下的 `<session_id>.cw` 文件，省去了用户手动导出的繁琐步骤，且避免了多个会话间的文件覆盖冲突。
 
 ## 脚本能力映射
 

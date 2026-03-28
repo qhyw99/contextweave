@@ -88,7 +88,9 @@ async function main() {
   if (result.status === "ok" && result.cw_code) {
     const fs = require("fs");
     const path = require("path");
-    const filePath = path.join(process.cwd(), "diagram.cw");
+    // Use session_id as filename, fallback to 'diagram.cw' if missing
+    const filename = result.session_id ? `${result.session_id}.cw` : "diagram.cw";
+    const filePath = path.join(process.cwd(), filename);
     fs.writeFileSync(filePath, result.cw_code, "utf8");
   }
 
