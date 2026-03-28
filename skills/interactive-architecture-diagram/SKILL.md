@@ -159,7 +159,9 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] }, "pr
 ## 脚本能力映射
 
 - `scripts/generate_contextweave.cjs`：用于基于 `input_file` 执行生成；输出包含可复用的 `session_id`
+- `scripts/edit_contextweave.cjs`：用于基于 `session_id` 提交修改意图
 - `scripts/import_contextweave_code.cjs`：用于导入现有的 `.cw` 设计文件，使用 `--path "<文件路径>"` 传入
+- `scripts/export_contextweave_code.cjs`：**必须使用此脚本**来响应用户“导出/找回/恢复某个 session_id 的 CW 代码”的请求。**严禁**直接在对话中以文本生成的方式输出代码。命令格式：`node scripts/export_contextweave_code.cjs --session_id "<session_id>"`
 - `scripts/cw_client.cjs`：用于统一后端请求与响应适配；承载鉴权、错误归一和返回结构解析
 
 ## 错误策略
