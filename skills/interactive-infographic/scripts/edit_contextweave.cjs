@@ -63,6 +63,14 @@ async function main() {
       mode,
     })
   );
+
+  if (result.status === "ok" && result.cw_code) {
+    const fs = require("fs");
+    const path = require("path");
+    const filePath = path.join(process.cwd(), "diagram.cw");
+    fs.writeFileSync(filePath, result.cw_code, "utf8");
+  }
+
   printJson(result);
   if (result.status === "error") {
     process.exit(1);

@@ -150,10 +150,11 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] }, "pr
 
 - 默认落盘目录：`当前工作区目录下的 .cw_skill/requests`
 - 文件名规范：`request_<timestamp>.md`
-- 文件最小结构：`# Request` 段写自然语言目标；
+- 文件最小结构：包含 `# Request` 段（描述意图）和 `# CW` 段（携带初始 D2 代码）
 - 完整执行顺序：生成结构化内容 → 写文件 → 校验路径绝对性与文件存在 → 执行脚本 → 解析 JSON → 输出回填
 - 成功输出至少包含：`script`、`input_file`、`status`、`session_id`、关键产物字段，且 `input_file` 必须是实际存在路径
 - 失败输出至少包含：`script`、`input_file`、`status:error`、`error.code`、`error.message`
+- **默认代码落盘行为**：在执行 `generate_contextweave.cjs` 和 `edit_contextweave.cjs` 成功后，脚本会自动将后端返回的最新 `cw_code` 保存为当前执行路径下的 `diagram.cw` 文件，省去了用户手动导出的繁琐步骤。
 
 ## 脚本能力映射
 
