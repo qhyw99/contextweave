@@ -114,6 +114,12 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] }, "pr
 4. 基于文件生成：`node scripts/generate_contextweave.cjs --input_file "<绝对文件路径>"`
 5. 结果校验：检查结构是否仍满足“论证性、关系显式、同构可读”
 
+## 附加文件链接（Link属性）
+
+当用户要求在图中节点关联本地文件路径（即添加 `link` 属性）时，必须采用**两步法**以保证生成质量：
+1. **第一步（结构生成）**：先忽略链接要求，仅根据语义和结构化要求生成核心图结构（使用 `generate_contextweave.cjs`）。
+2. **第二步（属性注入）**：在用户确认生成的结构满足预期后，发起第二次编辑调用（使用 `edit_contextweave.cjs`），明确指示“请为图中的某某节点添加对应的 `link: <绝对文件路径>` 属性”。这种做法可利用后端的精确路由，将链接修改任务交由更适合处理结构化属性的工具完成。
+
 ## 意图到命令模板
 
 - 请求编排：将结构化意图组织为文件后，向后端发起调用 - 基于文件生成：`node scripts/generate_contextweave.cjs --input_file "<绝对文件路径>"`
@@ -150,7 +156,7 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] }, "pr
 
 - 默认落盘目录：`当前工作区目录下的 .cw_skill/requests`
 - 文件名规范：`request_<timestamp>.md`
-- 文件最小结构：包含 `# Request` 段（描述意图）和 `# CW` 段（携带初始 D2 代码）
+- 文件最小结构：包含 `# Request` 段（描述意图）和 `# CW` 段（携带初始 CW 代码）
 - 完整执行顺序：生成结构化内容 → 写文件 → 校验路径绝对性与文件存在 → 执行脚本 → 解析 JSON → 输出回填
 - 成功输出至少包含：`script`、`input_file`、`status`、`session_id`、关键产物字段，且 `input_file` 必须是实际存在路径
 - 失败输出至少包含：`script`、`input_file`、`status:error`、`error.code`、`error.message`
