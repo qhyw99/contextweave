@@ -2,3 +2,5 @@ contextweave-diagrams.zip
 *.zip
 .DS_Store
 .trae/documents/*.md
+*test*.cjs
+*e2e*.cjs
