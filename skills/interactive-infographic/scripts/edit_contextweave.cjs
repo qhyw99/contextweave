@@ -71,6 +71,10 @@ async function main() {
     const filename = result.session_id ? `${result.session_id}.cw` : "diagram.cw";
     const filePath = path.join(process.cwd(), filename);
     fs.writeFileSync(filePath, result.cw_code, "utf8");
+    
+    // Remove cw_code from the output to prevent polluting LLM context window
+    delete result.cw_code;
+    result.saved_cw_file = filePath;
   }
 
   printJson(result);
