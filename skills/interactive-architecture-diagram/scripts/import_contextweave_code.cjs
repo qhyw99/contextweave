@@ -36,6 +36,11 @@ async function main() {
       raw_result: result,
     };
   }
+
+  // Remove code fields to avoid outputting large text
+  if (result.cw_code) delete result.cw_code;
+  if (result.d2_code) delete result.d2_code;
+
   printJson(result);
   if (result.status === "error") {
     process.exit(1);

@@ -39,17 +39,17 @@ function normalizeEditResult(result) {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const sessionId = args["--session_id"] || args["-s"];
-  const userRequest = args["--user_request"] || args["-u"];
+  const inputFile = args["--input_file"] || args["-i"];
   const mode = args["--mode"] || args["-m"] || "3";
 
-  if (!sessionId || !userRequest) {
+  if (!sessionId || !inputFile) {
     printJson({
       status: "error",
       error: {
         code: "MISSING_REQUIRED_ARGS",
-        message: "必须提供 session_id 和 user_request",
+        message: "必须提供 session_id 和 input_file（为保证上下文完整，编辑操作强制要求使用文件）",
         recoverable: true,
-        recovery_hint: "补充参数后重试",
+        recovery_hint: "补充 input_file 参数后重试",
       },
     });
     process.exit(1);
@@ -58,7 +58,7 @@ async function main() {
   const client = new CWClient();
   const result = normalizeEditResult(
     await client.runGeneration({
-      userRequest,
+      inputFile,
       sessionId,
       mode,
     })
