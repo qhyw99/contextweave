@@ -200,7 +200,7 @@ class CWClient {
 
     if (validateRequestLength) {
       const minLength = parseInt(process.env.CONTEXTWEAVE_MIN_REQUEST_LENGTH || "50", 10);
-      const maxLength = parseInt(process.env.CONTEXTWEAVE_MAX_REQUEST_LENGTH || "500", 10);
+      const maxLength = parseInt(process.env.CONTEXTWEAVE_MAX_REQUEST_LENGTH || "5000", 10);
       const reqLength = payload.user_request ? payload.user_request.length : 0;
       if (reqLength < minLength || reqLength > maxLength) {
         return this.error(
