@@ -126,7 +126,7 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] }, "pr
 - 导入已有文件：当用户提供 `.cw` 等现成文件时，直接调用：`node scripts/import_contextweave_code.cjs --path "<绝对文件路径>"`
 
 ## 参数约束与回填规则
-
+- 初始生成的 `user_request` 长度：默认必须在 50-500 字符之间。如果需要调整限制，可通过环境变量 `CONTEXTWEAVE_MIN_REQUEST_LENGTH` 与 `CONTEXTWEAVE_MAX_REQUEST_LENGTH` 自定义。
 - `input_file`：必填，且必须为绝对路径
 - `input_file`：执行前必须存在且可读；不存在时禁止调用脚本
 - 文件内容：必须是结构化意图结果，禁止仅放零散关键词
@@ -171,7 +171,7 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] }, "pr
 - `scripts/cw_client.cjs`：用于统一后端请求与响应适配；承载鉴权、错误归一和返回结构解析
 
 ## 错误策略
-
+- `INVALID_REQUEST_LENGTH`：检查请求字数是否在允许范围内（默认 50-500 字符），调整请求的详细程度后重试
 - `MISSING_SESSION_ID`：视为不可继续迭代，立即重试当前请求并校验返回
 - `SESSION_INVALID_OR_EXPIRED`：先重建会话，再回放当前意图
 - `AUTH_ERROR`：校验密钥与配置后重试

@@ -82,6 +82,7 @@ async function main() {
       sessionId,
       mode,
       inputSequence,
+      validateRequestLength: true,
     })
   );
 

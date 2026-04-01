@@ -152,7 +152,7 @@ class CWClient {
     });
   }
 
-  async runGeneration({ userRequest, inputFile = null, sessionId = null, mode = "3", inputSequence = null }) {
+  async runGeneration({ userRequest, inputFile = null, sessionId = null, mode = "3", inputSequence = null, validateRequestLength = false }) {
     const payload = {
       mode,
       input_sequence: inputSequence,
@@ -197,6 +197,21 @@ class CWClient {
     } else {
       payload.user_request = userRequest;
     }
+
+    if (validateRequestLength) {
+      const minLength = parseInt(process.env.CONTEXTWEAVE_MIN_REQUEST_LENGTH || "50", 10);
+      const maxLength = parseInt(process.env.CONTEXTWEAVE_MAX_REQUEST_LENGTH || "500", 10);
+      const reqLength = payload.user_request ? payload.user_request.length : 0;
+      if (reqLength < minLength || reqLength > maxLength) {
+        return this.error(
+          "INVALID_REQUEST_LENGTH",
+          `生成请求的长度必须在 ${minLength} 到 ${maxLength} 字符之间，当前长度: ${reqLength}。`,
+          true,
+          `请调整请求文本的详细程度，确保字数在 ${minLength}-${maxLength} 之间。`
+        );
+      }
+    }
+
     return this.request("/run", payload);
   }
 
