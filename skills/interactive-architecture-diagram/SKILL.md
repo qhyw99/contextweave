@@ -157,6 +157,16 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] }, "pr
 - 默认落盘目录：`当前工作区目录下的 .cw_skill/requests`
 - 文件名规范：`request_<timestamp>.md`
 - 文件最小结构：包含 `# Request` 段（描述意图）和 `# CW` 段（携带初始 CW 代码）
+- **Markdown 模板示例**：为保证后端能够准确解析，在生成 `input_file` 时必须严格遵循以下结构（包含两部分）：
+  ```markdown
+  # Request
+  [在这里详细描述修改指令、绘图意图或结构说明]
+
+  # CW
+  ```cw
+  [在这里放置初始或修改后的 CW 代码块]
+  ```
+  ```
 - 完整执行顺序：生成结构化内容 → 写文件 → 校验路径绝对性与文件存在 → 执行脚本 → 解析 JSON → 输出回填
 - 成功输出至少包含：`script`、`input_file`、`status`、`session_id`、关键产物字段，且 `input_file` 必须是实际存在路径
 - 失败输出至少包含：`script`、`input_file`、`status:error`、`error.code`、`error.message`
@@ -190,3 +200,15 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] }, "pr
 - 凭据获取：凭据优先读取环境变量 `CONTEXTWEAVE_MCP_API_KEY`，若未显式设置，将使用内置的默认匿名凭据。不得通过扫描本地目录自动发现密钥。
 - 文件访问：只读取当前任务明确指定的输入文件；禁止遍历用户目录、工作区或无关配置文件；所有文件路径必须是绝对路径且被严格限制在当前执行工作区目录范围内。
 - 数据最小化：仅向后端发送完成当前绘图请求所必需的数据，禁止附带无关本地文件内容。
+
+## Scenarios (多视图/链路拆分)
+
+### 场景抽象与单一数据源
+- 当用户要求“区分不同业务链路展示”或“在同一架构上高亮不同流程”（例如区分 Query 链路和 Callback 链路）时，**必须** 使用 ContextWeave/D2 的 `scenarios` 原生语法。
+- **禁止** 复制或拼接多个完整的文件。应首先定义一个完整的“基础架构图（Base Layer）”，然后在同一个代码块底部使用 `scenarios` 定义各个视图的增量覆盖。
+
+### 场景构建规范
+- 基础层必须包含所有节点和连线。
+- 在 `scenarios: {}` 块中，针对每个独立链路定义一个子块（如 `QueryFlow: {}`）。
+- 在场景子块中，通过修改无关组件的透明度（如 `style.opacity: 0.2`）进行淡化，并通过修改目标链路的连线样式（如 `stroke: red, stroke-width: 4`）进行高亮。
+- 场景定义完成后，可以告知用户后续可通过指定 ScenarioName 提取特定视图。

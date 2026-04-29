@@ -148,7 +148,17 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] }, "pr
 
 - 默认落盘目录：`当前工作区目录下的 .cw_skill/requests`
 - 文件名规范：`request_<timestamp>.md`
-- 文件最小结构：`# Request` 段写自然语言目标；
+- 文件最小结构：包含 `# Request` 段（描述意图）和 `# CW` 段（携带初始 CW 代码）
+- **Markdown 模板示例**：为保证后端能够准确解析，在生成 `input_file` 时必须严格遵循以下结构（包含两部分）：
+  ```markdown
+  # Request
+  [在这里详细描述修改指令、绘图意图或结构说明]
+
+  # CW
+  ```cw
+  [在这里放置初始或修改后的 CW 代码块]
+  ```
+  ```
 - 完整执行顺序：生成结构化内容 → 写文件 → 校验路径绝对性与文件存在 → 执行脚本 → 解析 JSON → 输出回填
 - 成功输出至少包含：`script`、`input_file`、`status`、`session_id`、关键产物字段，且 `input_file` 必须是实际存在路径
 - 失败输出至少包含：`script`、`input_file`、`status:error`、`error.code`、`error.message`

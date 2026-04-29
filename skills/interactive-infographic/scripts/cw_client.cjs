@@ -108,8 +108,24 @@ class CWClient {
       if (response.statusCode === 403) {
         return this.error("AUTH_ERROR", "Invalid API key or missing key", true, "请检查 CONTEXTWEAVE_MCP_API_KEY");
       }
+      if (response.statusCode === 429) {
+        let errorMsg = "Too Many Requests";
+        try {
+          const parsed = JSON.parse(response.body);
+          errorMsg = parsed.detail || parsed.error || errorMsg;
+        } catch (e) {}
+        return this.error("RATE_LIMIT_EXCEEDED", errorMsg, true, "请配置专属 API Key 或稍后重试");
+      }
       if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw new Error(`${response.statusCode} ${response.statusMessage || "Request failed"}`);
+        let errorMsg = `${response.statusCode} ${response.statusMessage || "Request failed"}`;
+        try {
+          const parsed = JSON.parse(response.body);
+          const detail = parsed.detail || parsed.error;
+          if (detail) {
+            errorMsg += `: ${typeof detail === 'object' ? JSON.stringify(detail) : detail}`;
+          }
+        } catch (e) {}
+        throw new Error(errorMsg);
       }
       return JSON.parse(response.body || "{}");
     } catch (error) {
@@ -161,6 +177,11 @@ class CWClient {
       session_id: sessionId,
       test_file: null,
     };
+    
+    // Add use_unified_bot flag if explicitly set via environment variable
+    if (process.env.CONTEXTWEAVE_USE_UNIFIED_BOT === "true") {
+      payload.use_unified_bot = true;
+    }
     if (inputFile) {
       const pathError = this.validateSafePath(inputFile);
       if (pathError) {
