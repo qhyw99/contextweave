@@ -82,6 +82,8 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] }, "pr
 
 - 分析用户输入，抽取实体、关系、层级与叙事路径
 - 将图表达意图组织为结构化文件，并触发基于 `input_file` 的后端调用
+- 首次生成时：保留 `# CW` 段作为结构占位即可，不要求客户端预先写入非空的首版 CW
+- 修改已有图时：在 `# CW` 段中放入现有 CW 文本，并连同本轮修改意图一起提交
 - 从后端返回中提取关键字段并组织规整结果输出
 
 ### 后端负责
@@ -121,7 +123,7 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] }, "pr
 
 - `input_file`：必填，且必须为绝对路径
 - `input_file`：执行前必须存在且可读；不存在时禁止调用脚本
-- 文件内容：必须是结构化意图结果，禁止仅放零散关键词
+- 文件内容：必须是结构化意图结果；禁止整个文件为空或仅放零散关键词；首次生成时允许 `# CW` 段为空
 - 返回回填：每轮输出必须包含本轮脚本名、执行状态、核心返回字段
 - 若未完成落盘或未实际执行脚本：返回 `status: error` 且标记 `code: EXECUTION_NOT_PERFORMED`
 - 若 `input_file` 不存在：返回 `status: error` 且标记 `code: INPUT_FILE_NOT_FOUND`
@@ -148,17 +150,27 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] }, "pr
 
 - 默认落盘目录：`当前工作区目录下的 .cw_skill/requests`
 - 文件名规范：`request_<timestamp>.md`
-- 文件最小结构：包含 `# Request` 段（描述意图）和 `# CW` 段（携带初始 CW 代码）
+- 文件最小结构：包含 `# Request` 段（描述意图）和 `# CW` 段（携带可选的初始/现有 CW 上下文；首次生成可为空）
 - **Markdown 模板示例**：为保证后端能够准确解析，在生成 `input_file` 时必须严格遵循以下结构（包含两部分）：
-  ```markdown
+  ````markdown
   # Request
   [在这里详细描述修改指令、绘图意图或结构说明]
 
   # CW
   ```cw
-  [在这里放置初始或修改后的 CW 代码块]
   ```
+  ````
+- **场景 A（首次生成）**：允许保留空的 `# CW` 代码块；后端会主要根据 `# Request` 生成首版 `cw_code`
+- **场景 B（修改已有 CW）**：应在 `# CW` 代码块中放入当前已有的 CW 文本，例如：
+  ````markdown
+  # Request
+  [在这里描述要如何修改现有图]
+
+  # CW
+  ```cw
+  [在这里放入当前已有的 CW 文本]
   ```
+  ````
 - 完整执行顺序：生成结构化内容 → 写文件 → 校验路径绝对性与文件存在 → 执行脚本 → 解析 JSON → 输出回填
 - 成功输出至少包含：`script`、`input_file`、`status`、`session_id`、关键产物字段，且 `input_file` 必须是实际存在路径
 - 失败输出至少包含：`script`、`input_file`、`status:error`、`error.code`、`error.message`
@@ -183,6 +195,7 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] }, "pr
 
 - `input_file`：来自当前回合请求编排产物，必须为绝对路径
 - 文件内容：需要体现结构化意图与关系，不使用空文件或纯术语清单
+- 首次生成时允许 `# CW` 段为空；修改已有图时应在该段提供现有 CW 文本
 - 其他请求参数：按脚本参数要求透传，不在 Skill 层定义渲染实现细节
 
 ## 安全边界与隐私声明
