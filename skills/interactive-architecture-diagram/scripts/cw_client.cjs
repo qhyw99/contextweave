@@ -168,7 +168,7 @@ class CWClient {
     });
   }
 
-  async runGeneration({ userRequest, inputFile = null, sessionId = null, mode = "3", inputSequence = null, validateRequestLength = false }) {
+  async runGeneration({ userRequest, inputFile = null, sessionId = null, mode = "3", inputSequence = null, validateRequestLength = false, basePath = "" }) {
     const payload = {
       mode,
       input_sequence: inputSequence,
@@ -176,6 +176,7 @@ class CWClient {
       export_pptx: false,
       session_id: sessionId,
       test_file: null,
+      base_path: basePath,
     };
     
     // Add use_unified_bot flag if explicitly set via environment variable
