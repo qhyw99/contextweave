@@ -41,7 +41,6 @@ async function main() {
   const sessionId = args["--session_id"] || args["-s"];
   const inputFile = args["--input_file"] || args["-i"];
   const mode = args["--mode"] || args["-m"] || "3";
-  const basePath = args["--base_path"] || args["-b"] || "";
 
   if (!sessionId || !inputFile) {
     printJson({
@@ -62,7 +61,6 @@ async function main() {
       inputFile,
       sessionId,
       mode,
-      basePath,
     })
   );
 

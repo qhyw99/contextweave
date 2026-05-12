@@ -168,7 +168,7 @@ class CWClient {
     });
   }
 
-  async runGeneration({ userRequest, inputFile = null, sessionId = null, mode = "3", inputSequence = null, validateRequestLength = false, basePath = "" }) {
+  async runGeneration({ userRequest, inputFile = null, sessionId = null, mode = "3", inputSequence = null, validateRequestLength = false }) {
     const payload = {
       mode,
       input_sequence: inputSequence,
@@ -176,7 +176,6 @@ class CWClient {
       export_pptx: false,
       session_id: sessionId,
       test_file: null,
-      base_path: basePath,
     };
     
     // Add use_unified_bot flag if explicitly set via environment variable
@@ -213,6 +212,23 @@ class CWClient {
         }
         payload.user_request = reqText;
         payload.initial_cw_code = cwText;
+
+        // Try to parse user_request as JSON to extract base_path if present
+        try {
+          let jsonText = reqText;
+          // Extract JSON block if enclosed in markdown
+          const jsonMatch = reqText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+          if (jsonMatch) {
+            jsonText = jsonMatch[1];
+          }
+          const parsedReq = JSON.parse(jsonText);
+          if (parsedReq && parsedReq.base_path) {
+            payload.base_path = parsedReq.base_path;
+          }
+        } catch (e) {
+          // Not a valid JSON or no base_path, which is fine for normal text requests
+        }
+
       } catch (error) {
         return this.error("READ_ERROR", `Failed to read input file: ${String(error.message || error)}`);
       }
