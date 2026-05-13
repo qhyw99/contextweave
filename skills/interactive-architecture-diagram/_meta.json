@@ -5,7 +5,6 @@
     "emoji": "🧠",
     "requires": {
       "bins": ["node"]
-    },
-    "primaryEnv": "CONTEXTWEAVE_MCP_API_KEY"
+    }
   }
 }

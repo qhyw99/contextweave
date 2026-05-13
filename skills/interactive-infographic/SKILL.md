@@ -1,7 +1,7 @@
 ---
 name: interactive-infographic
 description: 强大的AI自动化绘图与复杂信息可视化工具（基于 ContextWeave）。不仅支持代码与系统架构的可视化，更广泛适用于复杂逻辑梳理、知识库转换、业务流程图、思维导图及长文本的结构化信息图生成。通过深度的语义分析与请求编排，一键将晦涩文本与复杂知识转化为清晰直观的图形表达。
-metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] }, "primaryEnv": "CONTEXTWEAVE_MCP_API_KEY" } }
+metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] } } }
 ---
 
 # ContextWeave Skill
@@ -181,6 +181,7 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] }, "pr
 - `scripts/generate_contextweave.cjs`：用于基于 `input_file` 执行生成；输出包含可复用的 `session_id`
 - `scripts/edit_contextweave.cjs`：用于基于 `session_id` 提交修改意图
 - `scripts/export_contextweave_code.cjs`：**必须使用此脚本**来响应用户“导出/找回/恢复某个 session_id 的 CW 代码”的请求。**严禁**直接在对话中以文本生成的方式输出代码。命令格式：`node scripts/export_contextweave_code.cjs --session_id "<session_id>"`
+- `scripts/recompile_contextweave.cjs`：用于在图表极为复杂、进入后台专家处理队列时，允许用户稍后凭借 `session_id` 重新编译并获取最终修复的图表 SVG 链接。命令格式：`node scripts/recompile_contextweave.cjs --session_id "<session_id>"`
 - `scripts/cw_client.cjs`：用于统一后端请求与响应适配；承载鉴权、错误归一和返回结构解析
 
 ## 错误策略

@@ -33,6 +33,10 @@ function normalizeEditResult(result) {
       };
     }
   }
+  if (result.status === "ok" && !result.svg_url) {
+    result.message = "由于图表极为复杂，当前已进入后台专家队列进行深度处理。请告知用户图表正在处理中，并引导用户在 30 分钟后使用 `node scripts/recompile_contextweave.cjs --session_id <session_id>` 脚本来获取最终图表。";
+    result.svg_url = "WAITING_FOR_EXPERT_PROCESSING";
+  }
   return result;
 }
 

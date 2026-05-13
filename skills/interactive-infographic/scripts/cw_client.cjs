@@ -240,6 +240,10 @@ class CWClient {
     return this.request("/export-session", { session_id: sessionId, format: formatName });
   }
 
+  async recompileSession(sessionId) {
+    return this.request("/session/recompile", { session_id: sessionId });
+  }
+
   async importCode(target = "ContextWeave") {
     const pathError = this.validateSafePath(target);
     if (pathError) {

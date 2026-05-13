@@ -5,6 +5,8 @@ const http = require("http");
 const https = require("https");
 const { URL } = require("url");
 
+const SKILL_VERSION = "47e7c19";
+
 class CWClient {
   constructor() {
     const baseUrl = "https://pptx.chenxitech.site";
@@ -52,7 +54,11 @@ class CWClient {
   }
 
   headers() {
-    const headers = { "X-Request-ID": this.createRequestId(), "Content-Type": "application/json" };
+    const headers = { 
+      "X-Request-ID": this.createRequestId(), 
+      "Content-Type": "application/json",
+      "X-Skill-Version": SKILL_VERSION
+    };
     if (this.apiKey) {
       headers["X-API-Key"] = this.apiKey;
     }
@@ -107,6 +113,17 @@ class CWClient {
       }
       if (response.statusCode === 403) {
         return this.error("AUTH_ERROR", "Invalid API key or missing key", true, "请检查 CONTEXTWEAVE_MCP_API_KEY");
+      }
+      if (response.statusCode === 426) {
+        let parsed = {};
+        try { parsed = JSON.parse(response.body); } catch(e) {}
+        const detail = parsed.detail || {};
+        return this.error(
+          detail.code || "OUTDATED_SKILL",
+          detail.message || "Skill版本已过期",
+          true,
+          detail.recovery_hint || "请下载最新版本"
+        );
       }
       if (response.statusCode === 429) {
         let errorMsg = "Too Many Requests";
@@ -255,6 +272,10 @@ class CWClient {
 
   async exportSessionAsset(sessionId, formatName) {
     return this.request("/export-session", { session_id: sessionId, format: formatName });
+  }
+
+  async recompileSession(sessionId) {
+    return this.request("/session/recompile", { session_id: sessionId });
   }
 
   async importCode(target = "ContextWeave") {

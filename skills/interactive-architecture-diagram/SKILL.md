@@ -1,7 +1,7 @@
 ---
 name: interactive-architecture-diagram
 description: 强大的AI自动化绘图与复杂信息可视化工具（基于 ContextWeave）。不仅支持代码与系统架构的可视化，更广泛适用于复杂逻辑梳理、知识库转换、业务流程图、思维导图及长文本的结构化信息图生成。通过深度的语义分析与请求编排，一键将晦涩文本与复杂知识转化为清晰直观的图形表达。
-metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] }, "primaryEnv": "CONTEXTWEAVE_MCP_API_KEY" } }
+metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] } } }
 ---
 
 # ContextWeave Skill
@@ -130,7 +130,7 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] }, "pr
 
 当用户要求在图中的对象（无论是模块节点还是连线）上关联本地文件路径时，**严禁**试图在一次请求中同时完成绘图和链接设置。必须严格执行**两步法**：
 1. **结构生成**：调用 `generate_contextweave.cjs`，仅根据语义生成图结构。在这一步的 `# Request` 中，**完全忽略**用户的链接要求，只关注如何把图画好。
-2. **批量注入**：在第一步执行成功并拿到 `session_id` 后，发起第二次独立的工具调用（使用 `edit_contextweave.cjs`）。在 `# Request` 中输出如下的纯语义 JSON 格式指令，**必须包含 `base_path` (当前工作区绝对路径)**。请直接使用自然语言描述目标对象（如节点名称或连线描述），后端大模型会自动将其翻译为底层的精确路径并完成注入。**特别注意：如果用户意图明确指向了文件中的特定代码块，你必须在路径后追加 `#L<起始行号>-L<结束行号>` 格式的行号范围（如 `#L10-L20`），以实现精确跳转。**
+2. **批量注入**：在第一步执行成功并拿到 `session_id` 后，发起第二次独立的工具调用（使用 `edit_contextweave.cjs`）。在 `# Request` 中输出如下的纯语义 JSON 格式指令，**必须包含 `base_path` (当前工作区绝对路径)**。请直接使用自然语言描述目标对象（如节点名称或连线描述），后端大模型会自动将其翻译为底层的精确路径并完成拼接，**你不需要在 link 中手动添加 `file:///` 前缀**。**特别注意：如果用户意图明确指向了文件中的特定代码块，你必须在路径后追加 `#L<起始行号>-L<结束行号>` 格式的行号范围（如 `#L10-L20`），以实现精确跳转。**
    ```json
    {
      "base_path": "<当前工作区路径>",
@@ -210,6 +210,7 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] }, "pr
 - `scripts/edit_contextweave.cjs`：用于基于 `session_id` 提交修改意图
 - `scripts/import_contextweave_code.cjs`：用于导入现有的 `.cw` 设计文件，使用 `--path "<文件路径>"` 传入
 - `scripts/export_contextweave_code.cjs`：**必须使用此脚本**来响应用户“导出/找回/恢复某个 session_id 的 CW 代码”的请求。**严禁**直接在对话中以文本生成的方式输出代码。命令格式：`node scripts/export_contextweave_code.cjs --session_id "<session_id>"`
+- `scripts/recompile_contextweave.cjs`：用于在图表极为复杂、进入后台专家处理队列时，允许用户稍后凭借 `session_id` 重新编译并获取最终修复的图表 SVG 链接。命令格式：`node scripts/recompile_contextweave.cjs --session_id "<session_id>"`
 - `scripts/cw_client.cjs`：用于统一后端请求与响应适配；承载鉴权、错误归一和返回结构解析
 
 ## 错误策略

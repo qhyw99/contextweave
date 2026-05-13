@@ -16,6 +16,10 @@ if [ -f "$OUTPUT_PATH" ]; then
   rm -f "$OUTPUT_PATH"
 fi
 
+echo "Updating SKILL_VERSION..."
+COMMIT_HASH=$(cd "$ROOT_DIR" && git rev-parse --short=7 HEAD 2>/dev/null || echo "unknown")
+sed -i "s/const SKILL_VERSION = .*/const SKILL_VERSION = \"$COMMIT_HASH\";/" "$SKILL_DIR/scripts/cw_client.cjs"
+
 cd "$ROOT_DIR/skills"
 zip -r "$OUTPUT_PATH" "$SKILL_NAME" \
   -x "*.git*" \
