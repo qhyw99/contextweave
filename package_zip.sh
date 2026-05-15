@@ -20,6 +20,12 @@ echo "Updating SKILL_VERSION..."
 COMMIT_HASH=$(cd "$ROOT_DIR" && git rev-parse --short=7 HEAD 2>/dev/null || echo "unknown")
 sed -i "s/const SKILL_VERSION = .*/const SKILL_VERSION = \"$COMMIT_HASH\";/" "$SKILL_DIR/scripts/cw_client.cjs"
 
+BACKEND_CONFIG="$ROOT_DIR/../interleaved-thinking/config.yaml"
+if [ -f "$BACKEND_CONFIG" ]; then
+  echo "Updating required_skill_version in backend config..."
+  sed -i "s/required_skill_version: \".*\"/required_skill_version: \"$COMMIT_HASH\"/" "$BACKEND_CONFIG"
+fi
+
 cd "$ROOT_DIR/skills"
 zip -r "$OUTPUT_PATH" "$SKILL_NAME" \
   -x "*.git*" \

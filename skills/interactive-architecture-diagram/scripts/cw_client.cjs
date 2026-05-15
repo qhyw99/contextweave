@@ -5,7 +5,7 @@ const http = require("http");
 const https = require("https");
 const { URL } = require("url");
 
-const SKILL_VERSION = "47e7c19";
+const SKILL_VERSION = "b480b7c";
 
 class CWClient {
   constructor() {
