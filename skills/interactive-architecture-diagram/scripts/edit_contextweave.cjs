@@ -60,6 +60,15 @@ async function main() {
   }
 
   const client = new CWClient();
+  // Monkey patch to inject stage_execution: "stage2_only" for testing
+  const originalRequest = client.request.bind(client);
+  client.request = async (endpoint, payload) => {
+    if (endpoint === "/run") {
+      payload.stage_execution = "stage2_only";
+    }
+    return originalRequest(endpoint, payload);
+  };
+
   const result = normalizeEditResult(
     await client.runGeneration({
       inputFile,
