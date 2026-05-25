@@ -185,7 +185,7 @@ class CWClient {
     });
   }
 
-  async runGeneration({ userRequest, inputFile = null, sessionId = null, mode = "3", inputSequence = null, validateRequestLength = false }) {
+  async runGeneration({ userRequest, inputFile = null, sessionId = null, mode = "3", inputSequence = null, validateRequestLength = false, diagramStyle = null }) {
     const payload = {
       mode,
       input_sequence: inputSequence,
@@ -194,6 +194,9 @@ class CWClient {
       session_id: sessionId,
       test_file: null,
     };
+    if (diagramStyle) {
+      payload.diagram_style = diagramStyle;
+    }
     
     // Add use_unified_bot flag if explicitly set via environment variable
     if (process.env.CONTEXTWEAVE_USE_UNIFIED_BOT === "true") {
