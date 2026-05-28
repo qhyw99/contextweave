@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-const { CWClient, printJson } = require("./cw_client.cjs");
+const { CWClient, normalizeAssetResult, printJson } = require("./cw_client.cjs");
 
 function parseArgs(argv) {
   const args = {};
@@ -36,7 +36,7 @@ async function main() {
   }
 
   const client = new CWClient();
-  const result = await client.recompileSession(sessionId);
+  const result = normalizeAssetResult(await client.recompileSession(sessionId));
   printJson(result);
   if (result.status === "error") {
     process.exit(1);

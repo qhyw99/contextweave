@@ -302,7 +302,26 @@ function printJson(data) {
   process.stdout.write(`${JSON.stringify(data, null, 2)}\n`);
 }
 
+function normalizeAssetResult(result) {
+  if (!result || typeof result !== "object") {
+    return result;
+  }
+
+  // We don't need to do anything complex anymore, because the backend (mcp_server) 
+  // now sets the "svg_url" to the primary HTML wrapper link if HTML is enabled.
+  // It also returns "raw_svg_url" if we ever need the actual SVG link.
+
+  // Clean up excessive fields to keep the output clean
+  delete result.html_url;
+  delete result.primary_asset_url;
+  delete result.preferred_asset_url;
+  delete result.url;
+
+  return result;
+}
+
 module.exports = {
   CWClient,
+  normalizeAssetResult,
   printJson,
 };

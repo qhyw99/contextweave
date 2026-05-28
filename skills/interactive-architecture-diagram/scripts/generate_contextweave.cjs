@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-const { CWClient, printJson } = require("./cw_client.cjs");
+const { CWClient, normalizeAssetResult, printJson } = require("./cw_client.cjs");
 
 function parseArgs(argv) {
   const args = {};
@@ -20,6 +20,7 @@ function parseArgs(argv) {
 }
 
 function normalizeGenerationResult(result) {
+  result = normalizeAssetResult(result);
   if (result.status === "ok" && !result.session_id) {
     return {
       status: "error",
