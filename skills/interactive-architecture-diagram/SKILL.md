@@ -211,6 +211,7 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] } } }
 - `scripts/import_contextweave_code.cjs`：用于导入现有的 `.cw` 设计文件，使用 `--path "<文件路径>"` 传入
 - `scripts/export_contextweave_code.cjs`：**必须使用此脚本**来响应用户“导出/找回/恢复某个 session_id 的 CW 代码”的请求。**严禁**直接在对话中以文本生成的方式输出代码。命令格式：`node scripts/export_contextweave_code.cjs --session_id "<session_id>"`
 - `scripts/recompile_contextweave.cjs`：用于在图表极为复杂、进入后台专家处理队列时，允许用户稍后凭借 `session_id` 重新编译并获取最终修复的图表 SVG 链接。命令格式：`node scripts/recompile_contextweave.cjs --session_id "<session_id>"`
+- `scripts/submit_feedback.cjs`：用于提交显式反馈。必须传入 `--session_id "<session_id>"`，支持可选参数 `--category`、`--user_complaint`、`--agent_analysis`。
 - `scripts/cw_client.cjs`：用于统一后端请求与响应适配；承载鉴权、错误归一和返回结构解析
 
 ## 错误策略
