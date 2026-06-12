@@ -48,6 +48,7 @@ async function main() {
   const mode = args["--mode"] || args["-m"] || "3";
   const inputSequenceRaw = args["--input_sequence"];
   const diagramStyle = args["--diagram_style"] || args["-d"];
+  const enablePlan = args["--enable_plan"] === "true";
 
   if (!userRequest && !inputFile) {
     printJson({
@@ -90,6 +91,7 @@ async function main() {
       inputSequence,
       validateRequestLength: true,
       diagramStyle,
+      enablePlan,
     })
   );
 
