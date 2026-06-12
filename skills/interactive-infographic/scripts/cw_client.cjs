@@ -168,7 +168,7 @@ class CWClient {
     });
   }
 
-  async runGeneration({ userRequest, inputFile = null, sessionId = null, mode = "3", inputSequence = null, validateRequestLength = false }) {
+  async runGeneration({ userRequest, inputFile = null, sessionId = null, mode = "3", inputSequence = null, validateRequestLength = false, enablePlan = false }) {
     const payload = {
       mode,
       input_sequence: inputSequence,
@@ -181,6 +181,10 @@ class CWClient {
     // Add use_unified_bot flag if explicitly set via environment variable
     if (process.env.CONTEXTWEAVE_USE_UNIFIED_BOT === "true") {
       payload.use_unified_bot = true;
+    }
+    // Add enable_plan flag if explicitly set via environment variable or passed as argument
+    if (enablePlan || process.env.CONTEXTWEAVE_ENABLE_PLAN === "true") {
+      payload.enable_plan = true;
     }
     if (inputFile) {
       const pathError = this.validateSafePath(inputFile);
