@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-const { CWClient, normalizeAssetResult, printJson } = require("./cw_client.cjs");
+const { CWClient, normalizeAssetResult, downloadAssetsLocally, printJson } = require("./cw_client.cjs");
 
 function parseArgs(argv) {
   const args = {};
@@ -48,7 +48,6 @@ async function main() {
   const mode = args["--mode"] || args["-m"] || "3";
   const inputSequenceRaw = args["--input_sequence"];
   const diagramStyle = args["--diagram_style"] || args["-d"];
-  const enablePlan = args["--enable_plan"] === "true";
 
   if (!userRequest && !inputFile) {
     printJson({
@@ -91,7 +90,6 @@ async function main() {
       inputSequence,
       validateRequestLength: true,
       diagramStyle,
-      enablePlan,
     })
   );
 
@@ -112,6 +110,8 @@ async function main() {
   if (result.status === "ok" && result.session_id) {
     result.feedback_url = `https://pptx.chenxitech.site/feedback?session_id=${result.session_id}`;
   }
+
+  await downloadAssetsLocally(result);
 
   printJson(result);
   if (result.status === "error") {

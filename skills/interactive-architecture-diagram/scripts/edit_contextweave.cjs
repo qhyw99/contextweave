@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-const { CWClient, normalizeAssetResult, printJson } = require("./cw_client.cjs");
+const { CWClient, normalizeAssetResult, downloadAssetsLocally, printJson } = require("./cw_client.cjs");
 
 function parseArgs(argv) {
   const args = {};
@@ -95,6 +95,8 @@ async function main() {
   if (result.status === "ok" && result.session_id) {
     result.feedback_url = `https://pptx.chenxitech.site/feedback?session_id=${result.session_id}`;
   }
+
+  await downloadAssetsLocally(result);
 
   printJson(result);
   if (result.status === "error") {

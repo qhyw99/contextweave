@@ -5,7 +5,7 @@ const http = require("http");
 const https = require("https");
 const { URL } = require("url");
 
-const SKILL_VERSION = "cb31387";
+const SKILL_VERSION = "7336738";
 
 class CWClient {
   constructor() {
@@ -185,7 +185,7 @@ class CWClient {
     });
   }
 
-  async runGeneration({ userRequest, inputFile = null, sessionId = null, mode = "3", inputSequence = null, validateRequestLength = false, diagramStyle = null, enablePlan = false }) {
+  async runGeneration({ userRequest, inputFile = null, sessionId = null, mode = "3", inputSequence = null, validateRequestLength = false, diagramStyle = null }) {
     const payload = {
       mode,
       input_sequence: inputSequence,
@@ -201,10 +201,6 @@ class CWClient {
     // Add use_unified_bot flag if explicitly set via environment variable
     if (process.env.CONTEXTWEAVE_USE_UNIFIED_BOT === "true") {
       payload.use_unified_bot = true;
-    }
-    // Add enable_plan flag if explicitly set via environment variable or passed as argument
-    if (enablePlan || process.env.CONTEXTWEAVE_ENABLE_PLAN === "true") {
-      payload.enable_plan = true;
     }
     if (inputFile) {
       const pathError = this.validateSafePath(inputFile);
@@ -361,8 +357,88 @@ function normalizeAssetResult(result) {
   return result;
 }
 
+function downloadFile(urlString, dest) {
+  return new Promise((resolve, reject) => {
+    let parsed;
+    try {
+      parsed = new URL(urlString);
+    } catch (e) {
+      return reject(new Error("Invalid URL"));
+    }
+    const transport = parsed.protocol === "https:" ? https : http;
+    const file = fs.createWriteStream(dest);
+    
+    const request = transport.get(urlString, (response) => {
+      if (response.statusCode === 301 || response.statusCode === 302 || response.statusCode === 307 || response.statusCode === 308) {
+        // Handle redirect
+        file.close();
+        if (response.headers.location) {
+          return downloadFile(response.headers.location, dest).then(resolve).catch(reject);
+        } else {
+          return reject(new Error("Redirect without location"));
+        }
+      }
+      
+      if (response.statusCode !== 200) {
+        file.close();
+        fs.unlink(dest, () => {});
+        return reject(new Error(`Failed to download file, status code: ${response.statusCode}`));
+      }
+
+      response.pipe(file);
+      file.on("finish", () => {
+        file.close(() => resolve(dest));
+      });
+    });
+
+    request.on("error", (err) => {
+      file.close();
+      fs.unlink(dest, () => {});
+      reject(err);
+    });
+  });
+}
+
+async function downloadAssetsLocally(result) {
+  if (!result || result.status !== "ok") {
+    return result;
+  }
+  
+  const sessionId = result.session_id || "diagram";
+  const cwd = process.cwd();
+
+  // Handle svg_url or raw_svg_url
+  const svgUrl = result.raw_svg_url || result.svg_url;
+  if (svgUrl && svgUrl !== "WAITING_FOR_EXPERT_PROCESSING") {
+    // If it's HTML wrapper, the download might get HTML. It's better to fetch raw_svg_url if available, or just download what's there.
+    const dest = path.join(cwd, `diagram_${sessionId}${svgUrl.includes(".html") ? ".html" : ".svg"}`);
+    try {
+      await downloadFile(svgUrl, dest);
+      result.saved_svg_file = dest;
+      result.message = (result.message ? result.message + "\n" : "") + `资源已自动下载到本地：${dest}`;
+    } catch (err) {
+      // Silently fail or log error
+    }
+  }
+
+  // Handle pptx_url
+  if (result.pptx_url) {
+    const dest = path.join(cwd, `diagram_${sessionId}.pptx`);
+    try {
+      await downloadFile(result.pptx_url, dest);
+      result.saved_pptx_file = dest;
+      result.message = (result.message ? result.message + "\n" : "") + `PPTX 资源已自动下载到本地：${dest}`;
+    } catch (err) {
+      // Silently fail or log error
+    }
+  }
+
+  return result;
+}
+
 module.exports = {
   CWClient,
   normalizeAssetResult,
+  downloadAssetsLocally,
   printJson,
 };

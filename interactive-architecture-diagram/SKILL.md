@@ -145,7 +145,6 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] } } }
 ## 意图到命令模板
 
 - 请求编排：将结构化意图组织为文件后，向后端发起调用 - 基于文件生成：`node scripts/generate_contextweave.cjs --input_file "<绝对文件路径>"`
-- 大纲规划模式：对于特别复杂的逻辑结构，可通过附加参数启用大纲模式：`node scripts/generate_contextweave.cjs --input_file "<绝对文件路径>" --enable_plan true`
 - 导入已有文件：当用户提供 `.cw` 等现成文件时，直接调用：`node scripts/import_contextweave_code.cjs --path "<绝对文件路径>"`
 
 ## 参数约束与回填规则
@@ -207,7 +206,7 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] } } }
 
 ## 脚本能力映射
 
-- `scripts/generate_contextweave.cjs`：用于基于 `input_file` 执行生成；输出包含可复用的 `session_id`。支持传入 `--enable_plan true` 启用大纲规划与管线生成模式。
+- `scripts/generate_contextweave.cjs`：用于基于 `input_file` 执行生成；输出包含可复用的 `session_id`
 - `scripts/edit_contextweave.cjs`：用于基于 `session_id` 提交修改意图
 - `scripts/import_contextweave_code.cjs`：用于导入现有的 `.cw` 设计文件，使用 `--path "<文件路径>"` 传入
 - `scripts/export_contextweave_code.cjs`：**必须使用此脚本**来响应用户“导出/找回/恢复某个 session_id 的 CW 代码”的请求。**严禁**直接在对话中以文本生成的方式输出代码。命令格式：`node scripts/export_contextweave_code.cjs --session_id "<session_id>"`

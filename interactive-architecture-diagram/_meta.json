@@ -1,0 +1,10 @@
+{
+  "slug": "interactive-architecture-diagram",
+  "version": "0.1.0",
+  "openclaw": {
+    "emoji": "🧠",
+    "requires": {
+      "bins": ["node"]
+    }
+  }
+}

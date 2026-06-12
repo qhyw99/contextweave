@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-const { CWClient, printJson } = require("./cw_client.cjs");
+const { CWClient, downloadAssetsLocally, printJson } = require("./cw_client.cjs");
 
 function parseArgs(argv) {
   const args = {};
@@ -65,6 +65,9 @@ async function main() {
       };
     }
   }
+
+  await downloadAssetsLocally(result);
+
   printJson(result);
   if (result.status === "error") {
     process.exit(1);
