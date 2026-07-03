@@ -5,7 +5,7 @@ const http = require("http");
 const https = require("https");
 const { URL } = require("url");
 
-const SKILL_VERSION = "7336738";
+const SKILL_VERSION = "11a682b";
 
 class CWClient {
   constructor() {
@@ -185,7 +185,7 @@ class CWClient {
     });
   }
 
-  async runGeneration({ userRequest, inputFile = null, sessionId = null, mode = "3", inputSequence = null, validateRequestLength = false, diagramStyle = null }) {
+  async runGeneration({ userRequest, inputFile = null, sessionId = null, mode = "3", inputSequence = null, validateRequestLength = false, diagramStyle = null, enablePlan = false }) {
     const payload = {
       mode,
       input_sequence: inputSequence,
@@ -201,6 +201,10 @@ class CWClient {
     // Add use_unified_bot flag if explicitly set via environment variable
     if (process.env.CONTEXTWEAVE_USE_UNIFIED_BOT === "true") {
       payload.use_unified_bot = true;
+    }
+    // Add enable_plan flag if explicitly set via environment variable or passed as argument
+    if (enablePlan || process.env.CONTEXTWEAVE_ENABLE_PLAN === "true") {
+      payload.enable_plan = true;
     }
     if (inputFile) {
       const pathError = this.validateSafePath(inputFile);
@@ -218,9 +222,15 @@ class CWClient {
           const parts = content.split("# CW");
           const reqPart = parts[0];
           const cwPart = parts.slice(1).join("# CW");
-          const afterFence = cwPart.split("```cw")[1];
-          if (afterFence && afterFence.includes("```")) {
-            cwText = afterFence.split("```")[0].trim();
+          const afterFenceIndex = cwPart.indexOf("```cw");
+          if (afterFenceIndex !== -1) {
+            const afterFence = cwPart.substring(afterFenceIndex + 5);
+            const lastFenceIndex = afterFence.lastIndexOf("```");
+            if (lastFenceIndex !== -1) {
+              cwText = afterFence.substring(0, lastFenceIndex).trim();
+            } else {
+              cwText = afterFence.trim();
+            }
           } else {
             cwText = cwPart.trim();
           }
@@ -405,13 +415,22 @@ async function downloadAssetsLocally(result) {
   }
   
   const sessionId = result.session_id || "diagram";
-  const cwd = process.cwd();
+  const outputName = result.output_name || `diagram_${sessionId}`;
+  
+  let targetDir = process.cwd();
+  if (result.output_dir) {
+    targetDir = path.resolve(result.output_dir);
+    if (!fs.existsSync(targetDir)) {
+      fs.mkdirSync(targetDir, { recursive: true });
+    }
+  }
 
   // Handle svg_url or raw_svg_url
   const svgUrl = result.raw_svg_url || result.svg_url;
   if (svgUrl && svgUrl !== "WAITING_FOR_EXPERT_PROCESSING") {
     // If it's HTML wrapper, the download might get HTML. It's better to fetch raw_svg_url if available, or just download what's there.
-    const dest = path.join(cwd, `diagram_${sessionId}${svgUrl.includes(".html") ? ".html" : ".svg"}`);
+    const ext = svgUrl.includes(".html") ? ".html" : ".svg";
+    const dest = path.join(targetDir, `${outputName}${ext}`);
     try {
       await downloadFile(svgUrl, dest);
       result.saved_svg_file = dest;
@@ -423,7 +442,7 @@ async function downloadAssetsLocally(result) {
 
   // Handle pptx_url
   if (result.pptx_url) {
-    const dest = path.join(cwd, `diagram_${sessionId}.pptx`);
+    const dest = path.join(targetDir, `${outputName}.pptx`);
     try {
       await downloadFile(result.pptx_url, dest);
       result.saved_pptx_file = dest;

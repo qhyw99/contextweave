@@ -46,6 +46,8 @@ async function main() {
   const sessionId = args["--session_id"] || args["-s"];
   const inputFile = args["--input_file"] || args["-i"];
   const mode = args["--mode"] || args["-m"] || "3";
+  const outputName = args["--output_name"] || args["-n"];
+  const outputDir = args["--output_dir"] || args["-o"];
 
   if (!sessionId || !inputFile) {
     printJson({
@@ -81,10 +83,22 @@ async function main() {
   if (result.status === "ok" && result.cw_code) {
     const fs = require("fs");
     const path = require("path");
-    // Use session_id as filename, fallback to 'diagram.cw' if missing
-    const filename = result.session_id ? `${result.session_id}.cw` : "diagram.cw";
-    const filePath = path.join(process.cwd(), filename);
-    fs.writeFileSync(filePath, result.cw_code, "utf8");
+    
+    const filename = outputName ? `${outputName}.cw` : (result.session_id ? `${result.session_id}.cw` : "diagram.cw");
+    let targetDir = process.cwd();
+    if (outputDir) {
+      targetDir = path.resolve(outputDir);
+      if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true });
+      }
+    }
+    const filePath = path.join(targetDir, filename);
+    
+    let finalCode = result.cw_code;
+    if (result.session_id) {
+      finalCode = `# session_id: ${result.session_id}\n` + finalCode;
+    }
+    fs.writeFileSync(filePath, finalCode, "utf8");
     
     // Remove cw_code from the output to prevent polluting LLM context window
     delete result.cw_code;
@@ -96,6 +110,8 @@ async function main() {
     result.feedback_url = `https://pptx.chenxitech.site/feedback?session_id=${result.session_id}`;
   }
 
+  result.output_name = outputName;
+  result.output_dir = outputDir;
   await downloadAssetsLocally(result);
 
   printJson(result);

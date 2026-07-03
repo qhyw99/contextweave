@@ -144,13 +144,15 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] } } }
 
 ## 意图到命令模板
 
-- 请求编排：将结构化意图组织为文件后，向后端发起调用 - 基于文件生成：`node scripts/generate_contextweave.cjs --input_file "<绝对文件路径>"`
-- 大纲规划模式：对于特别复杂的逻辑结构，可通过附加参数启用大纲模式：`node scripts/generate_contextweave.cjs --input_file "<绝对文件路径>" --enable_plan true`
+- 请求编排：将结构化意图组织为文件后，向后端发起调用 - 基于文件生成：`node scripts/generate_contextweave.cjs --input_file "<绝对文件路径>" --output_name "<语义化文件名>" --output_dir "docs/diagrams"`
+- 大纲规划模式：对于特别复杂的逻辑结构，可通过附加参数启用大纲模式：`node scripts/generate_contextweave.cjs --input_file "<绝对文件路径>" --enable_plan true --output_name "<语义化文件名>" --output_dir "docs/diagrams"`
 - 导入已有文件：当用户提供 `.cw` 等现成文件时，直接调用：`node scripts/import_contextweave_code.cjs --path "<绝对文件路径>"`
 
 ## 参数约束与回填规则
 - 初始生成的 `user_request` 长度：默认必须在 50-500 字符之间。如果需要调整限制，可通过环境变量 `CONTEXTWEAVE_MIN_REQUEST_LENGTH` 与 `CONTEXTWEAVE_MAX_REQUEST_LENGTH` 自定义。
 - `input_file`：必填，且必须为绝对路径
+- `output_name`：必填，应为反映绘图意图的简短英文字符串，如 `system_arch`。
+- `output_dir`：推荐，建议指定为相对项目根目录的子目录，如 `docs/diagrams`。
 - `input_file`：执行前必须存在且可读；不存在时禁止调用脚本
 - 文件内容：必须是结构化意图结果；禁止整个文件为空或仅放零散关键词；首次生成时允许 `# CW` 段为空
 - 返回回填：每轮输出必须包含本轮脚本名、执行状态、核心返回字段
@@ -177,7 +179,7 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] } } }
 
 ## 文件落盘与执行规范
 
-- 默认落盘目录：`当前工作区目录下的 .cw_skill/requests`
+- 默认落盘目录：生成/编辑请求的 `.md` 文件默认存放于 `当前工作区目录下的 .cw_skill/requests`
 - 文件名规范：`request_<timestamp>.md`
 - 文件最小结构：包含 `# Request` 段（描述意图）和 `# CW` 段（携带可选的初始/现有 CW 上下文；首次生成可为空）
 - **Markdown 模板示例**：为保证后端能够准确解析，在生成 `input_file` 时必须严格遵循以下结构（包含两部分）：
@@ -203,7 +205,8 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] } } }
 - 完整执行顺序：生成结构化内容 → 写文件 → 校验路径绝对性与文件存在 → 执行脚本 → 解析 JSON → 输出回填
 - 成功输出至少包含：`script`、`input_file`、`status`、`session_id`、关键产物字段，且 `input_file` 必须是实际存在路径
 - 失败输出至少包含：`script`、`input_file`、`status:error`、`error.code`、`error.message`
-- **默认代码落盘行为**：在执行 `generate_contextweave.cjs` 和 `edit_contextweave.cjs` 成功后，脚本会自动将后端返回的最新 `cw_code` 保存为当前执行路径下的 `<session_id>.cw` 文件，省去了用户手动导出的繁琐步骤，且避免了多个会话间的文件覆盖冲突。
+- **语义化产物命名与归档**：在执行 `generate_contextweave.cjs` 和 `edit_contextweave.cjs` 时，**必须**根据用户的意图推断出一个简短且语义化的英文文件名（例如 `user_login_flow`），并通过 `--output_name <名称>` 参数传入。同时，强烈建议通过 `--output_dir "docs/diagrams"` 等参数，将生成的图表集中管理，避免污染项目根目录。
+- **默认代码落盘行为**：脚本会自动将后端返回的最新 `cw_code` 连同 `session_id` 注释一起保存为 `<output_dir>/<output_name>.cw` 文件（未提供参数时降级为 `diagram.cw` 或 `<session_id>.cw`），并同步下载 SVG/HTML 等附属资源，省去了用户手动导出的繁琐步骤。
 
 ## 脚本能力映射
 
