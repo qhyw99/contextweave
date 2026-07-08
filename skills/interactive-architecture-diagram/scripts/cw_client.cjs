@@ -2,6 +2,137 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const { URL } = require("url");
+const http = require("http");
+const https = require("https");
+const tls = require("tls");
+
+function getProxyForUrl(targetUrl) {
+  const protocol = targetUrl.protocol;
+  if (protocol === "https:") {
+    return process.env.HTTPS_PROXY || process.env.https_proxy;
+  } else if (protocol === "http:") {
+    return process.env.HTTP_PROXY || process.env.http_proxy;
+  }
+  return null;
+}
+
+function makeRequest(urlString, options, requestData = null, timeoutMs = 3000000) {
+  return new Promise((resolve, reject) => {
+    const targetUrl = new URL(urlString);
+    const proxyStr = getProxyForUrl(targetUrl);
+    
+    const requestOptions = {
+      ...options,
+      hostname: targetUrl.hostname,
+      port: targetUrl.port,
+      path: targetUrl.pathname + targetUrl.search,
+      protocol: targetUrl.protocol,
+    };
+
+    if (proxyStr) {
+      const isTargetHttps = targetUrl.protocol === "https:";
+      const AgentClass = isTargetHttps ? https.Agent : http.Agent;
+      
+      class ProxyAgent extends AgentClass {
+        createConnection(opts, cb) {
+          let proxyUrl;
+          try {
+            proxyUrl = new URL(proxyStr);
+          } catch (e) {
+            return cb(new Error(`Invalid proxy URL: ${proxyStr}`));
+          }
+          
+          const isHttpsProxy = proxyUrl.protocol === "https:";
+          const proxyRequestOptions = {
+            method: "CONNECT",
+            host: proxyUrl.hostname,
+            port: proxyUrl.port || (isHttpsProxy ? 443 : 80),
+            path: `${targetUrl.hostname}:${targetUrl.port || (isTargetHttps ? 443 : 80)}`,
+            headers: {
+              Host: targetUrl.hostname,
+            },
+          };
+
+          if (proxyUrl.username || proxyUrl.password) {
+            const auth = Buffer.from(`${proxyUrl.username}:${proxyUrl.password}`).toString("base64");
+            proxyRequestOptions.headers["Proxy-Authorization"] = `Basic ${auth}`;
+          }
+
+          const proxyReq = (isHttpsProxy ? https : http).request(proxyRequestOptions);
+
+          proxyReq.on("connect", (res, socket, head) => {
+            if (res.statusCode === 200) {
+              if (isTargetHttps) {
+                const tlsSocket = tls.connect({
+                  socket: socket,
+                  servername: targetUrl.hostname,
+                });
+                tlsSocket.on('error', (err) => {
+                  cb(err);
+                });
+                cb(null, tlsSocket);
+              } else {
+                cb(null, socket);
+              }
+            } else {
+              cb(new Error(`Proxy connection failed: ${res.statusCode}`));
+            }
+          });
+
+          proxyReq.on("error", (err) => {
+            cb(err);
+          });
+
+          proxyReq.setTimeout(timeoutMs, () => {
+            proxyReq.destroy(new Error("timeout"));
+          });
+
+          proxyReq.end();
+        }
+      }
+
+      requestOptions.agent = new ProxyAgent();
+    }
+
+    const lib = targetUrl.protocol === "https:" ? https : http;
+    const req = lib.request(requestOptions, (res) => {
+      resolve(res);
+    });
+
+    req.setTimeout(timeoutMs, () => {
+      req.destroy(new Error("timeout"));
+    });
+
+    req.on("error", (err) => {
+      if (err.message === "timeout" || err.code === "ECONNRESET") {
+        reject(new Error("timeout"));
+      } else {
+        reject(err);
+      }
+    });
+
+    if (requestData) {
+      req.write(requestData);
+    }
+    req.end();
+  });
+}
+
+function readBody(response) {
+  return new Promise((resolve, reject) => {
+    let data = '';
+    response.setEncoding('utf8');
+    response.on('data', (chunk) => {
+      data += chunk;
+    });
+    response.on('end', () => {
+      resolve(data);
+    });
+    response.on('error', (err) => {
+      reject(err);
+    });
+  });
+}
 
 const SKILL_VERSION = "f5e5da9";
 
@@ -121,33 +252,29 @@ class CWClient {
   }
 
   async postJson(urlString, body) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => {
-      controller.abort();
-    }, this.timeoutMs);
+    const requestData = JSON.stringify(body);
+    const requestOptions = {
+      method: "POST",
+      headers: {
+        ...this.headers(),
+        "Content-Length": Buffer.byteLength(requestData),
+      },
+    };
 
     try {
-      const response = await fetch(urlString, {
-        method: "POST",
-        headers: this.headers(),
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      });
+      const response = await makeRequest(urlString, requestOptions, requestData, this.timeoutMs);
+      const responseBody = await readBody(response);
 
-      const responseBody = await response.text();
-      
       return {
-        statusCode: response.status,
-        statusMessage: response.statusText,
+        statusCode: response.statusCode,
+        statusMessage: response.statusMessage,
         body: responseBody,
       };
     } catch (error) {
-      if (error.name === "AbortError") {
+      if (error.message === "timeout") {
         throw new Error("timeout");
       }
       throw error;
-    } finally {
-      clearTimeout(timeout);
     }
   }
 
@@ -343,31 +470,21 @@ async function downloadFile(urlString, dest) {
   }
 
   try {
-    const response = await fetch(urlString);
-    if (!response.ok) {
-      throw new Error(`Failed to download file, status code: ${response.status}`);
+    const response = await makeRequest(urlString, { method: "GET" }, null, 3000000);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw new Error(`Failed to download file, status code: ${response.statusCode}`);
     }
 
     const file = fs.createWriteStream(dest);
-    let streamToPipe = null;
-
-    if (response.body && typeof response.body.pipe === "function") {
-      streamToPipe = response.body;
-    } else if (response.body) {
-      const { Readable } = require("stream");
-      streamToPipe = Readable.fromWeb(response.body);
-    } else {
-      throw new Error("Response body is empty");
-    }
 
     return new Promise((resolve, reject) => {
-      streamToPipe.pipe(file);
+      response.pipe(file);
       
       file.on("finish", () => {
         file.close(() => resolve(dest));
       });
 
-      streamToPipe.on("error", (err) => {
+      response.on("error", (err) => {
         file.close();
         fs.unlink(dest, () => {});
         reject(err);
