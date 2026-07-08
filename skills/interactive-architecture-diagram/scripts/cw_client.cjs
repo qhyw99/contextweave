@@ -134,7 +134,7 @@ function readBody(response) {
   });
 }
 
-const SKILL_VERSION = "557427c";
+const SKILL_VERSION = "9f91c96";
 
 class CWClient {
   constructor() {
