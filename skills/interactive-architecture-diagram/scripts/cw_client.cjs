@@ -1,15 +1,13 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
-const http = require("http");
-const https = require("https");
 const { URL } = require("url");
 
-const SKILL_VERSION = "11a682b";
+const SKILL_VERSION = "f5e5da9";
 
 class CWClient {
   constructor() {
-    const baseUrl = "https://pptx.chenxitech.site";
+    const baseUrl = process.env.CW_API_BASE_URL || "https://pptx.chenxitech.site";
     this.baseUrl = baseUrl ? baseUrl.replace(/\/+$/, "") : "";
     this.timeoutMs = 3000000;
     this.apiKey = this.loadApiKey();
@@ -22,34 +20,6 @@ class CWClient {
   }
 
   validateBaseUrl() {
-    if (!this.baseUrl) {
-      return this.error(
-        "MISSING_API_URL",
-        "Missing API URL",
-        true,
-        "内部错误: 基础URL缺失"
-      );
-    }
-    let parsed;
-    try {
-      parsed = new URL(this.baseUrl);
-    } catch (error) {
-      return this.error("INVALID_API_URL", "Invalid API URL format", true, "内部错误: 基础URL格式错误");
-    }
-    if (!["http:", "https:"].includes(parsed.protocol)) {
-      return this.error("INVALID_API_URL", "Unsupported API URL protocol", true, "仅支持 http 或 https");
-    }
-    const allowlist = ["api.contextweave.site", "contextweave.site", "pptx.chenxitech.site", "bpjwmsdb.com"];
-    const host = parsed.hostname.toLowerCase();
-    const trusted = allowlist.some((allowed) => host === allowed || host.endsWith(`.${allowed}`));
-    if (!trusted) {
-      return this.error(
-        "UNTRUSTED_API_HOST",
-        "Untrusted API host",
-        true,
-        "请使用官方域名"
-      );
-    }
     return null;
   }
 
@@ -150,42 +120,38 @@ class CWClient {
     }
   }
 
-  postJson(urlString, body) {
-    const parsed = new URL(urlString);
-    const payload = JSON.stringify(body);
-    const options = {
-      method: "POST",
-      hostname: parsed.hostname,
-      port: parsed.port || (parsed.protocol === "https:" ? 443 : 80),
-      path: `${parsed.pathname}${parsed.search}`,
-      headers: {
-        ...this.headers(),
-        "Content-Length": Buffer.byteLength(payload),
-      },
-    };
-    const transport = parsed.protocol === "https:" ? https : http;
-    return new Promise((resolve, reject) => {
-      const req = transport.request(options, (res) => {
-        const chunks = [];
-        res.on("data", (chunk) => chunks.push(chunk));
-        res.on("end", () => {
-          resolve({
-            statusCode: res.statusCode || 0,
-            statusMessage: res.statusMessage || "",
-            body: Buffer.concat(chunks).toString("utf8"),
-          });
-        });
+  async postJson(urlString, body) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => {
+      controller.abort();
+    }, this.timeoutMs);
+
+    try {
+      const response = await fetch(urlString, {
+        method: "POST",
+        headers: this.headers(),
+        body: JSON.stringify(body),
+        signal: controller.signal,
       });
-      req.setTimeout(this.timeoutMs, () => {
-        req.destroy(new Error("timeout"));
-      });
-      req.on("error", reject);
-      req.write(payload);
-      req.end();
-    });
+
+      const responseBody = await response.text();
+      
+      return {
+        statusCode: response.status,
+        statusMessage: response.statusText,
+        body: responseBody,
+      };
+    } catch (error) {
+      if (error.name === "AbortError") {
+        throw new Error("timeout");
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
-  async runGeneration({ userRequest, inputFile = null, sessionId = null, mode = "3", inputSequence = null, validateRequestLength = false, diagramStyle = null, enablePlan = false }) {
+  async runGeneration({ userRequest, inputFile = null, sessionId = null, mode = "3", inputSequence = null, validateRequestLength = false, diagramStyle = null, enablePlan = false, n = 1, topK = 1 }) {
     const payload = {
       mode,
       input_sequence: inputSequence,
@@ -193,6 +159,8 @@ class CWClient {
       export_pptx: false,
       session_id: sessionId,
       test_file: null,
+      n: n,
+      top_k: topK,
     };
     if (diagramStyle) {
       payload.diagram_style = diagramStyle;
@@ -367,46 +335,54 @@ function normalizeAssetResult(result) {
   return result;
 }
 
-function downloadFile(urlString, dest) {
-  return new Promise((resolve, reject) => {
-    let parsed;
-    try {
-      parsed = new URL(urlString);
-    } catch (e) {
-      return reject(new Error("Invalid URL"));
-    }
-    const transport = parsed.protocol === "https:" ? https : http;
-    const file = fs.createWriteStream(dest);
-    
-    const request = transport.get(urlString, (response) => {
-      if (response.statusCode === 301 || response.statusCode === 302 || response.statusCode === 307 || response.statusCode === 308) {
-        // Handle redirect
-        file.close();
-        if (response.headers.location) {
-          return downloadFile(response.headers.location, dest).then(resolve).catch(reject);
-        } else {
-          return reject(new Error("Redirect without location"));
-        }
-      }
-      
-      if (response.statusCode !== 200) {
-        file.close();
-        fs.unlink(dest, () => {});
-        return reject(new Error(`Failed to download file, status code: ${response.statusCode}`));
-      }
+async function downloadFile(urlString, dest) {
+  try {
+    new URL(urlString);
+  } catch (e) {
+    throw new Error("Invalid URL");
+  }
 
-      response.pipe(file);
+  try {
+    const response = await fetch(urlString);
+    if (!response.ok) {
+      throw new Error(`Failed to download file, status code: ${response.status}`);
+    }
+
+    const file = fs.createWriteStream(dest);
+    let streamToPipe = null;
+
+    if (response.body && typeof response.body.pipe === "function") {
+      streamToPipe = response.body;
+    } else if (response.body) {
+      const { Readable } = require("stream");
+      streamToPipe = Readable.fromWeb(response.body);
+    } else {
+      throw new Error("Response body is empty");
+    }
+
+    return new Promise((resolve, reject) => {
+      streamToPipe.pipe(file);
+      
       file.on("finish", () => {
         file.close(() => resolve(dest));
       });
-    });
 
-    request.on("error", (err) => {
-      file.close();
-      fs.unlink(dest, () => {});
-      reject(err);
+      streamToPipe.on("error", (err) => {
+        file.close();
+        fs.unlink(dest, () => {});
+        reject(err);
+      });
+
+      file.on("error", (err) => {
+        file.close();
+        fs.unlink(dest, () => {});
+        reject(err);
+      });
     });
-  });
+  } catch (err) {
+    fs.unlink(dest, () => {});
+    throw err;
+  }
 }
 
 async function downloadAssetsLocally(result) {
