@@ -134,7 +134,7 @@ function readBody(response) {
   });
 }
 
-const SKILL_VERSION = "86692ac";
+const SKILL_VERSION = "11a8312";
 
 class CWClient {
   constructor() {
@@ -146,11 +146,18 @@ class CWClient {
   }
 
   loadApiKey() {
-    const key = process.env.CONTEXTWEAVE_MCP_API_KEY;
-    return key || "94a05d02-9ade-4d9d-9f39-88734d9e34b4";
+    return process.env.CONTEXTWEAVE_MCP_API_KEY || "";
   }
 
   validateBaseUrl() {
+    try {
+      const url = new URL(this.baseUrl);
+      if (url.hostname !== "pptx.chenxitech.site") {
+        return this.error("INVALID_DOMAIN", "Only pptx.chenxitech.site domain is allowed");
+      }
+    } catch (e) {
+      return this.error("INVALID_DOMAIN", "Invalid base URL");
+    }
     return null;
   }
 
