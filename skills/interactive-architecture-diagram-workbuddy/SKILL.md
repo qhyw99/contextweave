@@ -1,6 +1,6 @@
 ---
-name: interactive-infographic
-description: 强大的AI自动化绘图与复杂信息可视化工具（基于 ContextWeave）。不仅支持代码与系统架构的可视化，更广泛适用于复杂逻辑梳理、知识库转换、业务流程图、思维导图及长文本的结构化信息图生成。通过深度的语义分析与请求编排，一键将晦涩文本与复杂知识转化为清晰直观的图形表达。
+name: interactive-architecture-diagram-workbuddy
+description: 强大的AI自动化绘图与复杂信息可视化工具（基于 ContextWeave）。Workbuddy 增强版：支持生成并在对话框内直接展示内联 SVG 图形。通过深度的语义分析与请求编排，一键将晦涩文本与复杂知识转化为清晰直观的图形表达。
 metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] } } }
 ---
 
@@ -101,11 +101,19 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] } } }
 ## 执行优先级规则
 
 - 默认只走“请求编排为文件后，基于文件生成”这一种执行形式
+- **特殊场景（导入已有文件）**：当用户在输入中明确提供了现成的绘图文件（如 `.cw`）并要求导入或绘图时，**禁止**重新生成结构化意图文件或调用 `generate_contextweave.cjs`，也**禁止**仅以文本形式输出命令，必须直接使用工具调用 `node scripts/import_contextweave_code.cjs --path "<绝对文件路径>"` 进行导入。
 - 禁止只给语义分析或方案文本而不发起脚本调用
 - 若脚本失败，先按错误策略重试；仅在重试后仍失败时，输出失败原因与下一步操作建议
 - 路径应使用可移植定位：优先基于 Skill 根目录执行 `scripts/...`，避免依赖宿主固定绝对路径
 - 推荐完成“落盘 + 执行 + 回填”闭环：先写 `input_file`，再执行脚本，最后回填结果
 - 若当前环境无法执行脚本，需明确返回受限原因，并提供可执行替代步骤
+
+## Workbuddy 内联渲染规范
+
+本特化版本强制要求使用内联 SVG 渲染能力。在调用生成或编辑脚本并获得成功结果后，**必须**执行以下步骤：
+1. **环境准备**：先调用 `read_me` 工具加载 `diagram` 模块（获取全局 CSS 变量、颜色和排版规则）。
+2. **读取资源**：从脚本执行结果中提取 `saved_svg_file`（本地 SVG 文件绝对路径），并使用读取文件的工具读取其全部内容。
+3. **渲染图表**：调用 `show_widget` 工具，将读取到的原始 SVG 字符串直接传入，将其渲染并展现在对话框中。**注意**：传入的 SVG 必须以 `<svg>` 标签开头，禁止包含 `<html>` 或 `<body>` 标签。
 
 ## 决策流表达
 
@@ -115,13 +123,43 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] } } }
 4. 基于文件生成：`node scripts/generate_contextweave.cjs --input_file "<绝对文件路径>"`
 5. 结果校验：检查结构是否仍满足“论证性、关系显式、同构可读”
 
+## 强制上下文拍平（Context Flattening）
+
+**打破本地文件读取幻觉**：后端的绘图引擎运行在云端/隔离沙盒中，**绝对没有任何能力读取用户本地的任何文件**。
+因此，必须严格遵守以下拍平原则：
+1. **禁止基于文件路径的请求**：在 `# Request` 段落中，**严禁**出现诸如“请参考文件 `/path/to/file`”或“基于文件 `X` 生成”的描述。后端无法理解也无法执行此类指令。
+2. **拍平原则的执行动作**：如果用户的需求依赖于本地代码、日志或文档，你（客户端大模型）**必须先自行使用本地工具读取这些文件**，然后将其核心逻辑、流程或结构**总结并拍平（Flatten）成纯文本**，直接写入到 `# Request` 内部。后端只认传入的纯文本。
+3. **与 Link 属性的严格区分**：
+   - **依赖文件内容绘图**：必须自己读文件并拍平成文本放入 `# Request`。
+   - **仅仅是给画好的节点加超链接**：这不属于内容参考。必须遵循下方“附加文件链接（Link属性）”章节的 JSON 批量注入规范。
+
+## 附加文件链接（Link属性）
+
+当用户要求在图中的对象（无论是模块节点还是连线）上关联本地文件路径时，**严禁**试图在一次请求中同时完成绘图和链接设置。必须严格执行**两步法**：
+1. **结构生成**：调用 `generate_contextweave.cjs`，仅根据语义生成图结构。在这一步的 `# Request` 中，**完全忽略**用户的链接要求，只关注如何把图画好。
+2. **批量注入**：在第一步执行成功并拿到 `session_id` 后，发起第二次独立的工具调用（使用 `edit_contextweave.cjs`）。在 `# Request` 中输出如下的纯语义 JSON 格式指令，**必须包含 `base_path` (当前工作区绝对路径)**。请直接使用自然语言描述目标对象（如节点名称或连线描述），后端大模型会自动将其翻译为底层的精确路径并完成拼接，**你不需要在 link 中手动添加 `file:///` 前缀**。**特别注意：如果用户意图明确指向了文件中的特定代码块，你必须在路径后追加 `#L<起始行号>-L<结束行号>` 格式的行号范围（如 `#L10-L20`），以实现精确跳转。**
+   ```json
+   {
+     "base_path": "<当前工作区路径>",
+     "links": [
+       { "targets": ["模块A", "模块B"], "link": "./src/module.py#L10-L25" },
+       { "targets": ["模块A到模块B的连线"], "link": "./src/api_handler.py#L100-L105" },
+       { "targets": ["模块C"], "link": "./src/other.py" }
+     ]
+   }
+   ```
+
 ## 意图到命令模板
 
-- 请求编排：将结构化意图组织为文件后，向后端发起调用 - 基于文件生成：`node scripts/generate_contextweave.cjs --input_file "<绝对文件路径>"`
+- 请求编排：将结构化意图组织为文件后，向后端发起调用 - 基于文件生成：`node scripts/generate_contextweave.cjs --input_file "<绝对文件路径>" --output_name "<语义化文件名>" --output_dir "docs/diagrams"`
+- 大纲规划模式：对于特别复杂的逻辑结构，可通过附加参数启用大纲模式：`node scripts/generate_contextweave.cjs --input_file "<绝对文件路径>" --enable_plan true --output_name "<语义化文件名>" --output_dir "docs/diagrams"`
+- 导入已有文件：当用户提供 `.cw` 等现成文件时，直接调用：`node scripts/import_contextweave_code.cjs --path "<绝对文件路径>"`
 
 ## 参数约束与回填规则
-
+- 初始生成的 `user_request` 长度：默认必须在 50-500 字符之间。如果需要调整限制，可通过环境变量 `CONTEXTWEAVE_MIN_REQUEST_LENGTH` 与 `CONTEXTWEAVE_MAX_REQUEST_LENGTH` 自定义。
 - `input_file`：必填，且必须为绝对路径
+- `output_name`：必填，应为反映绘图意图的简短英文字符串，如 `system_arch`。
+- `output_dir`：推荐，建议指定为相对项目根目录的子目录，如 `docs/diagrams`。
 - `input_file`：执行前必须存在且可读；不存在时禁止调用脚本
 - 文件内容：必须是结构化意图结果；禁止整个文件为空或仅放零散关键词；首次生成时允许 `# CW` 段为空
 - 返回回填：每轮输出必须包含本轮脚本名、执行状态、核心返回字段
@@ -148,7 +186,7 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] } } }
 
 ## 文件落盘与执行规范
 
-- 默认落盘目录：`当前工作区目录下的 .cw_skill/requests`
+- 默认落盘目录：生成/编辑请求的 `.md` 文件默认存放于 `当前工作区目录下的 .cw_skill/requests`
 - 文件名规范：`request_<timestamp>.md`
 - 文件最小结构：包含 `# Request` 段（描述意图）和 `# CW` 段（携带可选的初始/现有 CW 上下文；首次生成可为空）
 - **Markdown 模板示例**：为保证后端能够准确解析，在生成 `input_file` 时必须严格遵循以下结构（包含两部分）：
@@ -174,20 +212,23 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] } } }
 - 完整执行顺序：生成结构化内容 → 写文件 → 校验路径绝对性与文件存在 → 执行脚本 → 解析 JSON → 输出回填
 - 成功输出至少包含：`script`、`input_file`、`status`、`session_id`、关键产物字段，且 `input_file` 必须是实际存在路径
 - 失败输出至少包含：`script`、`input_file`、`status:error`、`error.code`、`error.message`
-- **默认代码落盘行为**：在执行 `generate_contextweave.cjs` 和 `edit_contextweave.cjs` 成功后，脚本会自动将后端返回的最新 `cw_code` 保存为当前执行路径下的 `<session_id>.cw` 文件，省去了用户手动导出的繁琐步骤，且避免了多个会话间的文件覆盖冲突。
+- **语义化产物命名与归档**：在执行 `generate_contextweave.cjs` 和 `edit_contextweave.cjs` 时，**必须**根据用户的意图推断出一个简短且语义化的英文文件名（例如 `user_login_flow`），并通过 `--output_name <名称>` 参数传入。同时，强烈建议通过 `--output_dir "docs/diagrams"` 等参数，将生成的图表集中管理，避免污染项目根目录。
+- **默认代码落盘行为**：脚本会自动将后端返回的最新 `cw_code` 连同 `session_id` 注释一起保存为 `<output_dir>/<output_name>.cw` 文件（未提供参数时降级为 `diagram.cw` 或 `<session_id>.cw`），并同步下载 SVG/HTML 等附属资源，省去了用户手动导出的繁琐步骤。
 
 ## 脚本能力映射
 
-- `scripts/generate_contextweave.cjs`：用于基于 `input_file` 执行生成；输出包含可复用的 `session_id`
+- `scripts/generate_contextweave.cjs`：用于基于 `input_file` 执行生成；输出包含可复用的 `session_id`。支持传入 `--enable_plan true` 启用大纲规划与管线生成模式。
 - `scripts/edit_contextweave.cjs`：用于基于 `session_id` 提交修改意图
+- `scripts/import_contextweave_code.cjs`：用于导入现有的 `.cw` 设计文件，使用 `--path "<文件路径>"` 传入
 - `scripts/export_contextweave_code.cjs`：**必须使用此脚本**来响应用户“导出/找回/恢复某个 session_id 的 CW 代码”的请求。**严禁**直接在对话中以文本生成的方式输出代码。命令格式：`node scripts/export_contextweave_code.cjs --session_id "<session_id>"`
 - `scripts/recompile_contextweave.cjs`：用于在图表极为复杂、进入后台专家处理队列时，允许用户稍后凭借 `session_id` 重新编译并获取最终修复的图表 SVG 链接。命令格式：`node scripts/recompile_contextweave.cjs --session_id "<session_id>"`
+- `scripts/submit_feedback.cjs`：用于提交显式反馈。必须传入 `--session_id "<session_id>"`，支持可选参数 `--category`、`--user_complaint`、`--agent_analysis`。
 - `scripts/request_quota_code.cjs`：免费领取额度第一步——`node scripts/request_quota_code.cjs --email "<邮箱>"` 发送验证码（见 错误策略）。
 - `scripts/redeem_quota_code.cjs`：免费领取额度第二步——`node scripts/redeem_quota_code.cjs --email "<邮箱>" --code "<验证码>"` 兑换 API Key。
 - `scripts/cw_client.cjs`：用于统一后端请求与响应适配；承载鉴权、错误归一和返回结构解析
 
 ## 错误策略
-
+- `INVALID_REQUEST_LENGTH`：检查请求字数是否在允许范围内（默认 50-500 字符），调整请求的详细程度后重试
 - `MISSING_SESSION_ID`：视为不可继续迭代，立即重试当前请求并校验返回
 - `SESSION_INVALID_OR_EXPIRED`：先重建会话，再回放当前意图
 - `AUTH_ERROR`：校验密钥与配置后重试
@@ -213,3 +254,15 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] } } }
 - 凭据获取：凭据优先读取环境变量 `CONTEXTWEAVE_MCP_API_KEY`，若未显式设置，将使用内置的默认匿名凭据。不得通过扫描本地目录自动发现密钥。
 - 文件访问：只读取当前任务明确指定的输入文件；禁止遍历用户目录、工作区或无关配置文件；所有文件路径必须是绝对路径且被严格限制在当前执行工作区目录范围内。
 - 数据最小化：仅向后端发送完成当前绘图请求所必需的数据，禁止附带无关本地文件内容。
+
+## Scenarios (多视图/链路拆分)
+
+### 场景抽象与单一数据源
+- 当用户要求“区分不同业务链路展示”或“在同一架构上高亮不同流程”（例如区分 Query 链路和 Callback 链路）时，**必须** 使用 ContextWeave/D2 的 `scenarios` 原生语法。
+- **禁止** 复制或拼接多个完整的文件。应首先定义一个完整的“基础架构图（Base Layer）”，然后在同一个代码块底部使用 `scenarios` 定义各个视图的增量覆盖。
+
+### 场景构建规范
+- 基础层必须包含所有节点和连线。
+- 在 `scenarios: {}` 块中，针对每个独立链路定义一个子块（如 `QueryFlow: {}`）。
+- 在场景子块中，通过修改无关组件的透明度（如 `style.opacity: 0.2`）进行淡化，并通过修改目标链路的连线样式（如 `stroke: red, stroke-width: 4`）进行高亮。
+- 场景定义完成后，可以告知用户后续可通过指定 ScenarioName 提取特定视图。

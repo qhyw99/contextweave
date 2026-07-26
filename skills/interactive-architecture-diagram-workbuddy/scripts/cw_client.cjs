@@ -1,13 +1,144 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const { URL } = require("url");
 const http = require("http");
 const https = require("https");
-const { URL } = require("url");
+const tls = require("tls");
+
+function getProxyForUrl(targetUrl) {
+  const protocol = targetUrl.protocol;
+  if (protocol === "https:") {
+    return process.env.HTTPS_PROXY || process.env.https_proxy;
+  } else if (protocol === "http:") {
+    return process.env.HTTP_PROXY || process.env.http_proxy;
+  }
+  return null;
+}
+
+function makeRequest(urlString, options, requestData = null, timeoutMs = 3000000) {
+  return new Promise((resolve, reject) => {
+    const targetUrl = new URL(urlString);
+    const proxyStr = getProxyForUrl(targetUrl);
+    
+    const requestOptions = {
+      ...options,
+      hostname: targetUrl.hostname,
+      port: targetUrl.port,
+      path: targetUrl.pathname + targetUrl.search,
+      protocol: targetUrl.protocol,
+    };
+
+    if (proxyStr) {
+      const isTargetHttps = targetUrl.protocol === "https:";
+      const AgentClass = isTargetHttps ? https.Agent : http.Agent;
+      
+      class ProxyAgent extends AgentClass {
+        createConnection(opts, cb) {
+          let proxyUrl;
+          try {
+            proxyUrl = new URL(proxyStr);
+          } catch (e) {
+            return cb(new Error(`Invalid proxy URL: ${proxyStr}`));
+          }
+          
+          const isHttpsProxy = proxyUrl.protocol === "https:";
+          const proxyRequestOptions = {
+            method: "CONNECT",
+            host: proxyUrl.hostname,
+            port: proxyUrl.port || (isHttpsProxy ? 443 : 80),
+            path: `${targetUrl.hostname}:${targetUrl.port || (isTargetHttps ? 443 : 80)}`,
+            headers: {
+              Host: targetUrl.hostname,
+            },
+          };
+
+          if (proxyUrl.username || proxyUrl.password) {
+            const auth = Buffer.from(`${proxyUrl.username}:${proxyUrl.password}`).toString("base64");
+            proxyRequestOptions.headers["Proxy-Authorization"] = `Basic ${auth}`;
+          }
+
+          const proxyReq = (isHttpsProxy ? https : http).request(proxyRequestOptions);
+
+          proxyReq.on("connect", (res, socket, head) => {
+            if (res.statusCode === 200) {
+              if (isTargetHttps) {
+                const tlsSocket = tls.connect({
+                  socket: socket,
+                  servername: targetUrl.hostname,
+                });
+                tlsSocket.on('error', (err) => {
+                  cb(err);
+                });
+                cb(null, tlsSocket);
+              } else {
+                cb(null, socket);
+              }
+            } else {
+              cb(new Error(`Proxy connection failed: ${res.statusCode}`));
+            }
+          });
+
+          proxyReq.on("error", (err) => {
+            cb(err);
+          });
+
+          proxyReq.setTimeout(timeoutMs, () => {
+            proxyReq.destroy(new Error("timeout"));
+          });
+
+          proxyReq.end();
+        }
+      }
+
+      requestOptions.agent = new ProxyAgent();
+    }
+
+    const lib = targetUrl.protocol === "https:" ? https : http;
+    const req = lib.request(requestOptions, (res) => {
+      resolve(res);
+    });
+
+    req.setTimeout(timeoutMs, () => {
+      req.destroy(new Error("timeout"));
+    });
+
+    req.on("error", (err) => {
+      if (err.message === "timeout" || err.code === "ECONNRESET") {
+        reject(new Error("timeout"));
+      } else {
+        reject(err);
+      }
+    });
+
+    if (requestData) {
+      req.write(requestData);
+    }
+    req.end();
+  });
+}
+
+function readBody(response) {
+  return new Promise((resolve, reject) => {
+    let data = '';
+    response.setEncoding('utf8');
+    response.on('data', (chunk) => {
+      data += chunk;
+    });
+    response.on('end', () => {
+      resolve(data);
+    });
+    response.on('error', (err) => {
+      reject(err);
+    });
+  });
+}
+
+const SKILL_VERSION = "9f91c96";
 
 class CWClient {
   constructor() {
-    const baseUrl = "https://pptx.chenxitech.site";
+    const baseUrl = process.env.CW_API_BASE_URL || "https://pptx.chenxitech.site";
     this.baseUrl = baseUrl ? baseUrl.replace(/\/+$/, "") : "";
     this.timeoutMs = 3000000;
     this.apiKey = this.loadApiKey();
@@ -20,39 +151,15 @@ class CWClient {
   }
 
   validateBaseUrl() {
-    if (!this.baseUrl) {
-      return this.error(
-        "MISSING_API_URL",
-        "Missing API URL",
-        true,
-        "内部错误: 基础URL缺失"
-      );
-    }
-    let parsed;
-    try {
-      parsed = new URL(this.baseUrl);
-    } catch (error) {
-      return this.error("INVALID_API_URL", "Invalid API URL format", true, "内部错误: 基础URL格式错误");
-    }
-    if (!["http:", "https:"].includes(parsed.protocol)) {
-      return this.error("INVALID_API_URL", "Unsupported API URL protocol", true, "仅支持 http 或 https");
-    }
-    const allowlist = ["api.contextweave.site", "contextweave.site", "pptx.chenxitech.site", "bpjwmsdb.com"];
-    const host = parsed.hostname.toLowerCase();
-    const trusted = allowlist.some((allowed) => host === allowed || host.endsWith(`.${allowed}`));
-    if (!trusted) {
-      return this.error(
-        "UNTRUSTED_API_HOST",
-        "Untrusted API host",
-        true,
-        "请使用官方域名"
-      );
-    }
     return null;
   }
 
   headers() {
-    const headers = { "X-Request-ID": this.createRequestId(), "Content-Type": "application/json" };
+    const headers = { 
+      "X-Request-ID": this.createRequestId(), 
+      "Content-Type": "application/json",
+      "X-Skill-Version": SKILL_VERSION
+    };
     if (this.apiKey) {
       headers["X-API-Key"] = this.apiKey;
     }
@@ -108,6 +215,17 @@ class CWClient {
       if (response.statusCode === 403) {
         return this.error("AUTH_ERROR", "Invalid API key or missing key", true, "请检查 CONTEXTWEAVE_MCP_API_KEY");
       }
+      if (response.statusCode === 426) {
+        let parsed = {};
+        try { parsed = JSON.parse(response.body); } catch(e) {}
+        const detail = parsed.detail || {};
+        return this.error(
+          detail.code || "OUTDATED_SKILL",
+          detail.message || "Skill版本已过期",
+          true,
+          detail.recovery_hint || "请下载最新版本"
+        );
+      }
       if (response.statusCode === 429) {
         let errorMsg = "Too Many Requests";
         try {
@@ -149,42 +267,34 @@ class CWClient {
     }
   }
 
-  postJson(urlString, body) {
-    const parsed = new URL(urlString);
-    const payload = JSON.stringify(body);
-    const options = {
+  async postJson(urlString, body) {
+    const requestData = JSON.stringify(body);
+    const requestOptions = {
       method: "POST",
-      hostname: parsed.hostname,
-      port: parsed.port || (parsed.protocol === "https:" ? 443 : 80),
-      path: `${parsed.pathname}${parsed.search}`,
       headers: {
         ...this.headers(),
-        "Content-Length": Buffer.byteLength(payload),
+        "Content-Length": Buffer.byteLength(requestData),
       },
     };
-    const transport = parsed.protocol === "https:" ? https : http;
-    return new Promise((resolve, reject) => {
-      const req = transport.request(options, (res) => {
-        const chunks = [];
-        res.on("data", (chunk) => chunks.push(chunk));
-        res.on("end", () => {
-          resolve({
-            statusCode: res.statusCode || 0,
-            statusMessage: res.statusMessage || "",
-            body: Buffer.concat(chunks).toString("utf8"),
-          });
-        });
-      });
-      req.setTimeout(this.timeoutMs, () => {
-        req.destroy(new Error("timeout"));
-      });
-      req.on("error", reject);
-      req.write(payload);
-      req.end();
-    });
+
+    try {
+      const response = await makeRequest(urlString, requestOptions, requestData, this.timeoutMs);
+      const responseBody = await readBody(response);
+
+      return {
+        statusCode: response.statusCode,
+        statusMessage: response.statusMessage,
+        body: responseBody,
+      };
+    } catch (error) {
+      if (error.message === "timeout") {
+        throw new Error("timeout");
+      }
+      throw error;
+    }
   }
 
-  async runGeneration({ userRequest, inputFile = null, sessionId = null, mode = "3", inputSequence = null, validateRequestLength = false, enablePlan = false }) {
+  async runGeneration({ userRequest, inputFile = null, sessionId = null, mode = "3", inputSequence = null, validateRequestLength = false, diagramStyle = null, enablePlan = false, n = 1, topK = 1 }) {
     const payload = {
       mode,
       input_sequence: inputSequence,
@@ -192,7 +302,13 @@ class CWClient {
       export_pptx: false,
       session_id: sessionId,
       test_file: null,
+      n: n,
+      top_k: topK,
+      wrap_svg_in_html: false,
     };
+    if (diagramStyle) {
+      payload.diagram_style = diagramStyle;
+    }
     
     // Add use_unified_bot flag if explicitly set via environment variable
     if (process.env.CONTEXTWEAVE_USE_UNIFIED_BOT === "true") {
@@ -218,9 +334,15 @@ class CWClient {
           const parts = content.split("# CW");
           const reqPart = parts[0];
           const cwPart = parts.slice(1).join("# CW");
-          const afterFence = cwPart.split("```cw")[1];
-          if (afterFence && afterFence.includes("```")) {
-            cwText = afterFence.split("```")[0].trim();
+          const afterFenceIndex = cwPart.indexOf("```cw");
+          if (afterFenceIndex !== -1) {
+            const afterFence = cwPart.substring(afterFenceIndex + 5);
+            const lastFenceIndex = afterFence.lastIndexOf("```");
+            if (lastFenceIndex !== -1) {
+              cwText = afterFence.substring(0, lastFenceIndex).trim();
+            } else {
+              cwText = afterFence.trim();
+            }
           } else {
             cwText = cwPart.trim();
           }
@@ -232,6 +354,23 @@ class CWClient {
         }
         payload.user_request = reqText;
         payload.initial_cw_code = cwText;
+
+        // Try to parse user_request as JSON to extract base_path if present
+        try {
+          let jsonText = reqText;
+          // Extract JSON block if enclosed in markdown
+          const jsonMatch = reqText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+          if (jsonMatch) {
+            jsonText = jsonMatch[1];
+          }
+          const parsedReq = JSON.parse(jsonText);
+          if (parsedReq && parsedReq.base_path) {
+            payload.base_path = parsedReq.base_path;
+          }
+        } catch (e) {
+          // Not a valid JSON or no base_path, which is fine for normal text requests
+        }
+
       } catch (error) {
         return this.error("READ_ERROR", `Failed to read input file: ${String(error.message || error)}`);
       }
@@ -337,11 +476,103 @@ function normalizeAssetResult(result) {
   delete result.preferred_asset_url;
   delete result.url;
 
+  if (result.svg_url && typeof result.svg_url === "string") {
+    result.svg_url = result.svg_url.replace(/\.html(\?.*)?$/, '.svg$1');
+  }
+
+  return result;
+}
+
+async function downloadFile(urlString, dest) {
+  try {
+    new URL(urlString);
+  } catch (e) {
+    throw new Error("Invalid URL");
+  }
+
+  try {
+    const response = await makeRequest(urlString, { method: "GET" }, null, 3000000);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw new Error(`Failed to download file, status code: ${response.statusCode}`);
+    }
+
+    const file = fs.createWriteStream(dest);
+
+    return new Promise((resolve, reject) => {
+      response.pipe(file);
+      
+      file.on("finish", () => {
+        file.close(() => resolve(dest));
+      });
+
+      response.on("error", (err) => {
+        file.close();
+        fs.unlink(dest, () => {});
+        reject(err);
+      });
+
+      file.on("error", (err) => {
+        file.close();
+        fs.unlink(dest, () => {});
+        reject(err);
+      });
+    });
+  } catch (err) {
+    fs.unlink(dest, () => {});
+    throw err;
+  }
+}
+
+async function downloadAssetsLocally(result) {
+  if (!result || result.status !== "ok") {
+    return result;
+  }
+  
+  const sessionId = result.session_id || "diagram";
+  const outputName = result.output_name || `diagram_${sessionId}`;
+  
+  let targetDir = process.cwd();
+  if (result.output_dir) {
+    targetDir = path.resolve(result.output_dir);
+    if (!fs.existsSync(targetDir)) {
+      fs.mkdirSync(targetDir, { recursive: true });
+    }
+  }
+
+  // Handle svg_url or raw_svg_url
+  let svgUrl = result.raw_svg_url || result.svg_url;
+  if (svgUrl && svgUrl !== "WAITING_FOR_EXPERT_PROCESSING") {
+    // If it's HTML wrapper, the download might get HTML. It's better to fetch raw_svg_url if available, or just download what's there.
+    svgUrl = svgUrl.replace(/\.html(\?.*)?$/, '.svg$1');
+    const ext = ".svg";
+    const dest = path.join(targetDir, `${outputName}${ext}`);
+    try {
+      await downloadFile(svgUrl, dest);
+      result.saved_svg_file = dest;
+      result.message = (result.message ? result.message + "\n" : "") + `资源已自动下载到本地：${dest}`;
+    } catch (err) {
+      // Silently fail or log error
+    }
+  }
+
+  // Handle pptx_url
+  if (result.pptx_url) {
+    const dest = path.join(targetDir, `${outputName}.pptx`);
+    try {
+      await downloadFile(result.pptx_url, dest);
+      result.saved_pptx_file = dest;
+      result.message = (result.message ? result.message + "\n" : "") + `PPTX 资源已自动下载到本地：${dest}`;
+    } catch (err) {
+      // Silently fail or log error
+    }
+  }
+
   return result;
 }
 
 module.exports = {
   CWClient,
   normalizeAssetResult,
+  downloadAssetsLocally,
   printJson,
 };
