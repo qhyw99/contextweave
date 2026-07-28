@@ -48,7 +48,7 @@ async function main() {
   printJson({
     status: "ok",
     message: result.message || "API Key 已发送至您的邮箱",
-    next_step: "请查收邮件获取 API Key，并按 set_env.sh 指引将 CONTEXTWEAVE_MCP_API_KEY 配置到环境变量后重试生成",
+    next_step: "请查收邮件获取 API Key，并按指引将 CONTEXTWEAVE_MCP_API_KEY 配置到环境变量后重试生成",
   });
 }
 

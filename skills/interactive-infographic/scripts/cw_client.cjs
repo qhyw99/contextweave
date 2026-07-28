@@ -103,7 +103,7 @@ class CWClient {
     try {
       const response = await this.postJson(`${this.baseUrl}${endpoint}`, body);
       if (response.statusCode === 402) {
-        return this.error("PAYMENT_REQUIRED", "Insufficient credits", true, "额度不足。可引导用户免费领取：询问用户邮箱 → 运行 request_quota_code.cjs --email <邮箱> 发送验证码 → 询问验证码 → 运行 redeem_quota_code.cjs --email <邮箱> --code <验证码> → 用户查收邮件按 set_env.sh 配置 CONTEXTWEAVE_MCP_API_KEY 后重试。");
+        return this.error("PAYMENT_REQUIRED", "Insufficient credits", true, "额度不足。可引导用户免费领取：询问用户邮箱 → 运行 request_quota_code.cjs --email <邮箱> 发送验证码 → 询问验证码 → 运行 redeem_quota_code.cjs --email <邮箱> --code <验证码> → 用户查收邮件按指引配置 CONTEXTWEAVE_MCP_API_KEY 后重试。");
       }
       if (response.statusCode === 403) {
         return this.error("AUTH_ERROR", "Invalid API key or missing key", true, "请检查 CONTEXTWEAVE_MCP_API_KEY");
@@ -114,7 +114,7 @@ class CWClient {
           const parsed = JSON.parse(response.body);
           errorMsg = parsed.detail || parsed.error || errorMsg;
         } catch (e) {}
-        return this.error("RATE_LIMIT_EXCEEDED", errorMsg, true, "免费体验额度已用完或请求过于频繁。可稍后重试，或引导用户免费领取专属 API Key：询问用户邮箱 → 运行 request_quota_code.cjs --email <邮箱> 发送验证码 → 询问验证码 → 运行 redeem_quota_code.cjs --email <邮箱> --code <验证码> → 用户查收邮件按 set_env.sh 配置 CONTEXTWEAVE_MCP_API_KEY 后重试。");
+        return this.error("RATE_LIMIT_EXCEEDED", errorMsg, true, "免费体验额度已用完或请求过于频繁。可稍后重试，或引导用户免费领取专属 API Key：询问用户邮箱 → 运行 request_quota_code.cjs --email <邮箱> 发送验证码 → 询问验证码 → 运行 redeem_quota_code.cjs --email <邮箱> --code <验证码> → 用户查收邮件按指引配置 CONTEXTWEAVE_MCP_API_KEY 后重试。");
       }
       if (response.statusCode === 400 || response.statusCode === 409) {
         let errorMsg = `${response.statusCode} ${response.statusMessage || "Request failed"}`;

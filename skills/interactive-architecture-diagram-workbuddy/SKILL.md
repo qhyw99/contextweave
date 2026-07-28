@@ -237,7 +237,7 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] } } }
   2. 运行 `node scripts/request_quota_code.cjs --email "<邮箱>"` 发送验证码
   3. 询问用户收到的验证码
   4. 运行 `node scripts/redeem_quota_code.cjs --email "<邮箱>" --code "<验证码>"`
-  5. 提示用户查收邮件，按 set_env.sh 指引将 `CONTEXTWEAVE_MCP_API_KEY` 配置到环境变量
+  5. 提示用户查收邮件，按指引将 `CONTEXTWEAVE_MCP_API_KEY` 配置到环境变量
   6. 重试原请求
 - `API_ERROR`：检查网络与服务状态后重试
 
