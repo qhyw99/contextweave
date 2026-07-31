@@ -134,13 +134,25 @@ function readBody(response) {
   });
 }
 
-const SKILL_VERSION = "2b5c2f9";
+const SKILL_VERSION = "0e81c16";
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isTransientNetworkError(error) {
+  if (!error) return false;
+  if (error.message === "timeout") return true;
+  return ["ECONNRESET", "ECONNREFUSED", "EPIPE", "ETIMEDOUT"].includes(error.code);
+}
 
 class CWClient {
   constructor() {
     const baseUrl = process.env.CW_API_BASE_URL || "https://pptx.chenxitech.site";
     this.baseUrl = baseUrl ? baseUrl.replace(/\/+$/, "") : "";
     this.timeoutMs = 3000000;
+    this.maxRequestRetries = parseInt(process.env.CW_REQUEST_MAX_RETRIES || "3", 10);
+    this.retryBaseMs = parseInt(process.env.CW_REQUEST_RETRY_BASE_MS || "2000", 10);
     this.apiKey = this.loadApiKey();
     this.editorProtocol = process.env.CONTEXTWEAVE_EDITOR_PROTOCOL || "trae";
   }
@@ -214,8 +226,34 @@ class CWClient {
       body.editor_protocol = this.editorProtocol;
     }
 
+    for (let attempt = 1; attempt <= this.maxRequestRetries; attempt += 1) {
+      try {
+        const response = await this.postJson(`${this.baseUrl}${endpoint}`, body);
+        if (response.statusCode >= 500) {
+          // 5xx 视为瞬时故障，指数退避后重试
+          if (attempt < this.maxRequestRetries) {
+            const waitMs = this.retryBaseMs * Math.pow(2, attempt - 1);
+            process.stderr.write(`[retry ${attempt}/${this.maxRequestRetries}] 服务端 ${response.statusCode}，${waitMs / 1000}s 后重试...\n`);
+            await sleep(waitMs);
+            continue;
+          }
+          return this.error("API_ERROR", `${response.statusCode} ${response.statusMessage || "Server Error"}（已自动重试 ${this.maxRequestRetries} 次）`, true, "后端服务暂时不可用，请稍后重试；若持续失败请走 submit_feedback 兜底");
+        }
+        return this.handleResponse(response);
+      } catch (error) {
+        if (isTransientNetworkError(error) && attempt < this.maxRequestRetries) {
+          const waitMs = this.retryBaseMs * Math.pow(2, attempt - 1);
+          process.stderr.write(`[retry ${attempt}/${this.maxRequestRetries}] 网络瞬时故障（${error.message || error.code}），${waitMs / 1000}s 后重试...\n`);
+          await sleep(waitMs);
+          continue;
+        }
+        return this.error("API_ERROR", String(error.message || error), true, "请检查网络或后端服务状态后重试");
+      }
+    }
+  }
+
+  handleResponse(response) {
     try {
-      const response = await this.postJson(`${this.baseUrl}${endpoint}`, body);
       if (response.statusCode === 402) {
         return this.error("PAYMENT_REQUIRED", "Insufficient credits", true, "额度不足。可引导用户免费领取：询问用户邮箱 → 运行 request_quota_code.cjs --email <邮箱> 发送验证码 → 询问验证码 → 运行 redeem_quota_code.cjs --email <邮箱> --code <验证码> → 用户查收邮件按指引配置 CONTEXTWEAVE_MCP_API_KEY 后重试。");
       }
@@ -301,7 +339,7 @@ class CWClient {
     }
   }
 
-  async runGeneration({ userRequest, inputFile = null, sessionId = null, mode = "3", inputSequence = null, validateRequestLength = false, diagramStyle = null, enablePlan = false, n = 1, topK = 1 }) {
+  async runGeneration({ userRequest, inputFile = null, sessionId = null, mode = "3", inputSequence = null, validateRequestLength = false, diagramStyle = null, visualStyle = null, enablePlan = false, n = 1, topK = 1 }) {
     const payload = {
       mode,
       input_sequence: inputSequence,
@@ -315,7 +353,10 @@ class CWClient {
     if (diagramStyle) {
       payload.diagram_style = diagramStyle;
     }
-    
+    if (visualStyle) {
+      payload.visual_style = visualStyle;
+    }
+
     // Add use_unified_bot flag if explicitly set via environment variable
     if (process.env.CONTEXTWEAVE_USE_UNIFIED_BOT === "true") {
       payload.use_unified_bot = true;

@@ -1,5 +1,10 @@
 ---
 name: interactive-architecture-diagram
+slug: contextweave-interactive-architecture
+displayName: 交互式架构图
+version: 1.1.0
+summary: 强大的AI自动化绘图与复杂信息可视化工具（基于 ContextWeave）
+license: MIT
 description: 强大的AI自动化绘图与复杂信息可视化工具（基于 ContextWeave）。不仅支持代码与系统架构的可视化，更广泛适用于复杂逻辑梳理、知识库转换、业务流程图、思维导图及长文本的结构化信息图生成。通过深度的语义分析与请求编排，一键将晦涩文本与复杂知识转化为清晰直观的图形表达。
 metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] } } }
 ---
@@ -99,12 +104,13 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] } } }
 
 后端的图表风格自动推演依赖关键词匹配，存在误判风险（如思维导图被"层级"关键词劫持为拓扑图、空间包裹语义被误判为流程）。因此风格决策前置到 Skill 层：意图不明确时必须先向用户澄清，后端关键词推演仅作为兜底。
 
-- **触发条件**：用户的呈现逻辑（图类型）或配色基调不明确时，在落盘 `input_file` 前必须先向用户发起澄清提问。
-- **提问设计**：最多两个核心问题：
+- **触发条件**：用户的呈现逻辑（图类型）、节点形态或配色基调不明确时，在落盘 `input_file` 前必须先向用户发起澄清提问。
+- **提问设计**：最多三个核心问题：
   1. **呈现逻辑倾向**（四选一）：组件拓扑（系统/模块/服务之间的关系）/ 流程逻辑（步骤/分支/因果）/ 混合（流程为骨架、组件为落点）/ 思维导图树形（根节点逐层展开的细节蓝图）。
-  2. **配色基调倾向**：如科技蓝、暖色、深色等语义级描述。
-- **映射规则**：用户确认后，拓扑→`--diagram_style topology`、流程→`logic`、混合→`hybrid`、思维导图→`mindmap`，随 `generate_contextweave.cjs` 调用显式传入；配色翻译为语义级意图写入 `# Request`（遵守上方展示意图边界：不承诺 hex 色值严格一致）。
-- **豁免**：用户请求已明确图类型与配色（如"画一张蓝白配色的分层架构图"）时跳过提问，直接映射显式参数。
+  2. **节点形态倾向（Visual Style，二选一）**：组件卡片风（带 Header 与阴影的卡片组件，适用于系统架构、中台能力等组件化视图）/ 简约排版风（轻量 Markdown 排版与留白，适用于科研框架、逻辑推导等文本密集型视图）。
+  3. **配色基调倾向**：如科技蓝、暖色、深色等语义级描述。
+- **映射规则**：用户确认后，拓扑→`--diagram_style topology`、流程→`logic`、混合→`hybrid`、思维导图→`mindmap`，随 `generate_contextweave.cjs` 调用显式传入；节点形态→`--visual_style dashboard_card`（组件卡片风）或 `--visual_style editorial_flat`（简约排版风），同样随脚本调用显式传入；配色翻译为语义级意图写入 `# Request`（遵守上方展示意图边界：不承诺 hex 色值严格一致）。
+- **豁免**：用户请求已明确图类型、节点形态与配色（如"画一张蓝白配色的分层架构图"）时跳过提问，直接映射显式参数。
 - **用户回答"随便/你决定"时**：agent 自主选择最匹配的显式风格传入，并在 `# Request` 中写明选择依据；禁止留空交给后端关键词猜测。
 
 ---
@@ -140,7 +146,7 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] } } }
   4. 运行 `node scripts/redeem_quota_code.cjs --email "<邮箱>" --code "<验证码>"`
   5. 提示用户查收邮件，按指引将 `CONTEXTWEAVE_MCP_API_KEY` 配置到环境变量
   6. 重试原请求
-- `API_ERROR`：检查网络与服务状态后重试
+- `API_ERROR`：脚本已内置 3 次指数退避自动重试（覆盖超时/连接重置/5xx）；仍失败时检查网络与服务状态后重试
 
 ### 等待与失败兜底策略
 
@@ -201,7 +207,7 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] } } }
 - `edit_contextweave.cjs`：基于 `session_id` 提交修改意图
 - `import_contextweave_code.cjs`：导入现成 `.cw` 文件——`node scripts/import_contextweave_code.cjs --path "<绝对路径>"`（此场景禁止调用 generate）
 - `export_contextweave_code.cjs`：响应"导出/找回某 session_id 的 CW 代码"——严禁在对话中以文本输出代码，必须 `node scripts/export_contextweave_code.cjs --session_id "<session_id>"`
-- `recompile_contextweave.cjs`：专家队列场景的轮询拉取（见 §四 等待策略）
+- `recompile_contextweave.cjs`：专家队列场景的轮询拉取（内置自动轮询与退避，见 §四 等待策略）
 - `submit_feedback.cjs`：提交用户反馈（见 §四 兜底策略）
 - `request_quota_code.cjs`：免费领取额度第一步——`node scripts/request_quota_code.cjs --email "<邮箱>"` 发送验证码（见 §四 错误与异常策略）
 - `redeem_quota_code.cjs`：免费领取额度第二步——`node scripts/redeem_quota_code.cjs --email "<邮箱>" --code "<验证码>"` 兑换 API Key

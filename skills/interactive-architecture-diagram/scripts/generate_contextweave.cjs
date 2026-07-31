@@ -24,7 +24,7 @@ function normalizeGenerationResult(result) {
     result.choices = result.choices.map(choice => {
       let normalized = normalizeAssetResult(choice);
       if (!normalized.svg_url) {
-        normalized.message = "由于图表极为复杂，当前已进入后台专家队列进行深度处理。请告知用户图表正在处理中。";
+        normalized.message = "由于图表极为复杂，当前已进入后台专家队列进行深度处理。请告知用户图表正在处理中，并立即主动运行 `node scripts/recompile_contextweave.cjs --session_id <session_id>` 拉取结果（脚本内置自动轮询），不要让用户手动触发。";
         normalized.svg_url = "WAITING_FOR_EXPERT_PROCESSING";
       }
       return normalized;
@@ -58,7 +58,7 @@ function normalizeGenerationResult(result) {
     };
   }
   if (result.status === "ok" && !result.svg_url) {
-    result.message = "由于图表极为复杂，当前已进入后台专家队列进行深度处理。请告知用户图表正在处理中，并引导用户在 30 分钟后使用 `node scripts/recompile_contextweave.cjs --session_id <session_id>` 脚本来获取最终图表。";
+    result.message = "由于图表极为复杂，当前已进入后台专家队列进行深度处理。请告知用户图表正在处理中，并立即主动运行 `node scripts/recompile_contextweave.cjs --session_id <session_id>` 拉取结果（脚本内置自动轮询，默认最长等待约 20 分钟，生成完成即返回），不要让用户手动触发。";
     result.svg_url = "WAITING_FOR_EXPERT_PROCESSING";
   }
   return result;
@@ -72,6 +72,7 @@ async function main() {
   const mode = args["--mode"] || args["-m"] || "3";
   const inputSequenceRaw = args["--input_sequence"];
   const diagramStyle = args["--diagram_style"] || args["-d"];
+  const visualStyle = args["--visual_style"] || args["-v"];
   const outputName = args["--output_name"] || args["-n"];
   const outputDir = args["--output_dir"] || args["-o"];
   const n = parseInt(args["--n"] || "1", 10);
@@ -117,6 +118,7 @@ async function main() {
     inputSequence,
     validateRequestLength: true,
     diagramStyle,
+    visualStyle,
     n,
     topK,
   });
