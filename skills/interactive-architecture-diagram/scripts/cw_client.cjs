@@ -339,7 +339,7 @@ class CWClient {
     }
   }
 
-  async runGeneration({ userRequest, inputFile = null, sessionId = null, mode = "3", inputSequence = null, validateRequestLength = false, diagramStyle = null, visualStyle = null, enablePlan = false, n = 1, topK = 1 }) {
+  async runGeneration({ userRequest, inputFile = null, sessionId = null, mode = "3", inputSequence = null, validateRequestLength = false, diagramStyle = null, morphology = null, enablePlan = false, n = 1, topK = 1 }) {
     const payload = {
       mode,
       input_sequence: inputSequence,
@@ -353,8 +353,8 @@ class CWClient {
     if (diagramStyle) {
       payload.diagram_style = diagramStyle;
     }
-    if (visualStyle) {
-      payload.visual_style = visualStyle;
+    if (morphology) {
+      payload.morphology = morphology;
     }
 
     // Add use_unified_bot flag if explicitly set via environment variable

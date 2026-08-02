@@ -69,10 +69,10 @@ async function main() {
   const userRequest = args["--user_request"] || args["-u"];
   const inputFile = args["--input_file"] || args["-i"];
   const sessionId = args["--session_id"] || args["-s"];
-  const mode = args["--mode"] || args["-m"] || "3";
+  const mode = args["--mode"] || "3";
   const inputSequenceRaw = args["--input_sequence"];
   const diagramStyle = args["--diagram_style"] || args["-d"];
-  const visualStyle = args["--visual_style"] || args["-v"];
+  const morphology = args["--morphology"] || args["-m"];
   const outputName = args["--output_name"] || args["-n"];
   const outputDir = args["--output_dir"] || args["-o"];
   const n = parseInt(args["--n"] || "1", 10);
@@ -118,7 +118,7 @@ async function main() {
     inputSequence,
     validateRequestLength: true,
     diagramStyle,
-    visualStyle,
+    morphology,
     n,
     topK,
   });
