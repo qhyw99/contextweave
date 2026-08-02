@@ -4,3 +4,6 @@ contextweave-diagrams.zip
 .trae/documents/*.md
 *test*.cjs
 *e2e*.cjs
+
+.env
+.skillhub_token
