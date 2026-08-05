@@ -125,10 +125,11 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] } } }
   1. **呈现逻辑倾向**（四选一）：拓扑 / 逻辑 / 混合 / 思维导图。
   2. **构图范式倾向**（三选一）：包容式 / 流转式 / 陈述式。
   3. **配色基调倾向**：如科技蓝、暖色、深色等语义级描述。
-  4. **高亮/强调节点**：询问用户是否需要高亮或强调特定节点；若有，逐个确认节点名与各自颜色，组装为 `accent_targets`（如 `[{"name": "中山信美", "color": "暖橙"}]`）。
-- **映射规则**：用户确认后，将选择的呈现逻辑（对应 `topology` / `logic` / `hybrid` / `mindmap`）和构图范式（对应 `container` / `flow` / `editorial`）随脚本调用显式传入。配色翻译为语义级意图写入 `# Request`。若有高亮节点，将 `accent_targets` 以 JSON 字符串经 `--accent_targets` 参数显式传入；用户未声明则不传该参数。
+  4. **主色/风格预设确认**：询问用户主色（6 位 Hex 或常见色名，如 #C00000 / 正红 / corporate red）与风格预设（如 `corporate_red` / `corporate_blue` / `tech_blue`）。用户明确时组装为 `base_palette`（如 `{"primary": "#C00000", "style_preset": "corporate_red"}`）经 `--base_palette` 参数传入；用户未声明则不传该参数。
+  5. **高亮/强调节点**：询问用户是否需要高亮或强调特定节点；若有，逐个确认节点名与各自颜色，组装为 `accent_targets`（如 `[{"name": "中山信美", "color": "暖橙"}]`）。
+- **映射规则**：用户确认后，将选择的呈现逻辑（对应 `topology` / `logic` / `hybrid` / `mindmap`）和构图范式（对应 `container` / `flow` / `editorial`）随脚本调用显式传入。配色翻译为语义级意图写入 `# Request`（作为兼容兜底）。`base_palette` 是唯一允许出现 hex 色值的结构化字段，hex 色值不得出现在其他参数中；节点级高亮仍走 `accent_targets`。若有高亮节点，将 `accent_targets` 以 JSON 字符串经 `--accent_targets` 参数显式传入；用户未声明则不传该参数。
 - **豁免**：用户请求已明确图类型、构图范式与配色（如"画一张蓝白配色的包容式架构图"）时跳过提问。
-- **用户回答"随便/你决定"时**：agent 自主选择最匹配的组合传入，并在 `# Request` 中写明选择依据。
+- **用户回答"随便/你决定"时**：agent 自主选择最匹配的组合传入（包括自主选择合适的 `style_preset` 与主色），并在 `# Request` 中写明选择依据。
 
 ### 快速参考：典型场景提示词组合
 

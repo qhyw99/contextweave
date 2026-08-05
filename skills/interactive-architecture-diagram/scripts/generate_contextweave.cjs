@@ -19,6 +19,75 @@ function parseArgs(argv) {
   return args;
 }
 
+const COLOR_NAME_MAP = {
+  "红": "#C00000",
+  "正红": "#C00000",
+  "蓝": "#1F6FB4",
+  "科技蓝": "#1F6FB4",
+  "绿": "#2E7D32",
+  "橙": "#E65100",
+  "暖橙": "#E65100",
+  "紫": "#6A1B9A",
+  "金": "#B8860B",
+  "red": "#C00000",
+  "blue": "#1F6FB4",
+  "green": "#2E7D32",
+  "orange": "#E65100",
+  "purple": "#6A1B9A",
+};
+
+const STYLE_PRESET_ENUM = ["corporate_red", "corporate_blue", "tech_blue"];
+
+function invalidBasePalette(message) {
+  return {
+    status: "error",
+    error: {
+      code: "INVALID_BASE_PALETTE",
+      message,
+      recoverable: true,
+      recovery_hint: "按 JSON 对象格式传参后重试，如 {\"primary\":\"#C00000\",\"style_preset\":\"corporate_red\"}；primary 支持 6 位 Hex 或常见色名（红/蓝/绿/橙/紫/金/red/blue/green/orange/purple），style_preset 枚举为 corporate_red / corporate_blue / tech_blue",
+    },
+  };
+}
+
+function validateBasePalette(raw) {
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    return { error: invalidBasePalette("base_palette 必须是合法 JSON") };
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return { error: invalidBasePalette("base_palette 必须是 JSON 对象") };
+  }
+
+  const result = {};
+  if (parsed.primary !== undefined && parsed.primary !== null) {
+    if (typeof parsed.primary !== "string") {
+      return { error: invalidBasePalette("base_palette.primary 必须是字符串") };
+    }
+    const primary = parsed.primary.trim();
+    if (/^#[0-9a-fA-F]{6}$/.test(primary)) {
+      result.primary = primary;
+    } else if (/^#[0-9a-fA-F]{8}$/.test(primary) || /^rgba\s*\(/i.test(primary)) {
+      return { error: invalidBasePalette(`base_palette.primary 不支持 8 位 Hex 或 rgba 形式：${primary}`) };
+    } else if (COLOR_NAME_MAP[primary]) {
+      result.primary = COLOR_NAME_MAP[primary];
+    } else {
+      return { error: invalidBasePalette(`无法识别的 base_palette.primary：${primary}`) };
+    }
+  }
+
+  if (parsed.style_preset !== undefined && parsed.style_preset !== null) {
+    if (typeof parsed.style_preset !== "string" || !STYLE_PRESET_ENUM.includes(parsed.style_preset)) {
+      return { error: invalidBasePalette(`base_palette.style_preset 必须在枚举 [${STYLE_PRESET_ENUM.join(", ")}] 内`) };
+    }
+    result.style_preset = parsed.style_preset;
+  }
+
+  return { value: result };
+}
+
 function normalizeGenerationResult(result) {
   if (result.status === "ok" && Array.isArray(result.choices)) {
     result.choices = result.choices.map(choice => {
@@ -73,6 +142,8 @@ async function main() {
   const inputSequenceRaw = args["--input_sequence"];
   const diagramStyle = args["--diagram_style"] || args["-d"];
   const morphology = args["--morphology"] || args["-m"];
+  const accentTargetsRaw = args["--accent_targets"];
+  const basePaletteRaw = args["--base_palette"];
   const outputName = args["--output_name"] || args["-n"];
   const outputDir = args["--output_dir"] || args["-o"];
   const n = parseInt(args["--n"] || "1", 10);
@@ -109,6 +180,34 @@ async function main() {
     }
   }
 
+  let accentTargets = null;
+  if (accentTargetsRaw) {
+    try {
+      accentTargets = JSON.parse(accentTargetsRaw);
+    } catch (error) {
+      printJson({
+        status: "error",
+        error: {
+          code: "INVALID_ACCENT_TARGETS",
+          message: "accent_targets 必须是合法 JSON",
+          recoverable: true,
+          recovery_hint: "按 JSON 数组格式传参后重试，如 [{\"name\":\"节点名\",\"color\":\"暖橙\"}]",
+        },
+      });
+      process.exit(1);
+    }
+  }
+
+  let basePalette = null;
+  if (basePaletteRaw) {
+    const validation = validateBasePalette(basePaletteRaw);
+    if (validation.error) {
+      printJson(validation.error);
+      process.exit(1);
+    }
+    basePalette = validation.value;
+  }
+
   const client = new CWClient();
   const rawResult = await client.runGeneration({
     userRequest,
@@ -119,6 +218,8 @@ async function main() {
     validateRequestLength: true,
     diagramStyle,
     morphology,
+    accentTargets,
+    basePalette,
     n,
     topK,
   });
@@ -219,4 +320,8 @@ async function main() {
   }
 }
 
-main();
+module.exports = { validateBasePalette, COLOR_NAME_MAP, STYLE_PRESET_ENUM };
+
+if (require.main === module) {
+  main();
+}

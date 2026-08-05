@@ -134,7 +134,21 @@ function readBody(response) {
   });
 }
 
-const SKILL_VERSION = "0e81c16";
+function getSkillVersion() {
+  try {
+    const skillMdPath = path.join(__dirname, '..', 'SKILL.md');
+    if (fs.existsSync(skillMdPath)) {
+      const content = fs.readFileSync(skillMdPath, 'utf-8');
+      const match = content.match(/^version:\s*(.+)$/m);
+      if (match) {
+        return match[1].trim();
+      }
+    }
+  } catch (e) {}
+  return "unknown";
+}
+
+const SKILL_VERSION = getSkillVersion();
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -339,7 +353,7 @@ class CWClient {
     }
   }
 
-  async runGeneration({ userRequest, inputFile = null, sessionId = null, mode = "3", inputSequence = null, validateRequestLength = false, diagramStyle = null, morphology = null, enablePlan = false, n = 1, topK = 1 }) {
+  async runGeneration({ userRequest, inputFile = null, sessionId = null, mode = "3", inputSequence = null, validateRequestLength = false, diagramStyle = null, morphology = null, accentTargets = null, basePalette = null, enablePlan = false, n = 1, topK = 1 }) {
     const payload = {
       mode,
       input_sequence: inputSequence,
@@ -355,6 +369,12 @@ class CWClient {
     }
     if (morphology) {
       payload.morphology = morphology;
+    }
+    if (accentTargets) {
+      payload.accent_targets = accentTargets;
+    }
+    if (basePalette) {
+      payload.base_palette = basePalette;
     }
 
     // Add use_unified_bot flag if explicitly set via environment variable
@@ -439,7 +459,14 @@ class CWClient {
       }
     }
 
-    return this.request("/run", payload);
+    const result = await this.request("/run", payload);
+    // 打印服务端透传的 lint 软警告（仅提示，不影响成功判定与返回值）
+    if (result && Array.isArray(result.warnings) && result.warnings.length > 0) {
+      for (const warning of result.warnings) {
+        console.error(`[generation warnings] ${warning}`);
+      }
+    }
+    return result;
   }
 
   async exportSessionAsset(sessionId, formatName) {
