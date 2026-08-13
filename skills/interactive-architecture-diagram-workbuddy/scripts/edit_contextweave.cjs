@@ -45,7 +45,6 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   const sessionId = args["--session_id"] || args["-s"];
   const inputFile = args["--input_file"] || args["-i"];
-  const mode = args["--mode"] || args["-m"] || "3";
   const outputName = args["--output_name"] || args["-n"];
   const outputDir = args["--output_dir"] || args["-o"];
 
@@ -76,7 +75,6 @@ async function main() {
     await client.runGeneration({
       inputFile,
       sessionId,
-      mode,
     })
   );
 

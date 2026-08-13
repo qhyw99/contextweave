@@ -138,7 +138,6 @@ async function main() {
   const userRequest = args["--user_request"] || args["-u"];
   const inputFile = args["--input_file"] || args["-i"];
   const sessionId = args["--session_id"] || args["-s"];
-  const mode = args["--mode"] || "3";
   const inputSequenceRaw = args["--input_sequence"];
   const diagramStyle = args["--diagram_style"] || args["-d"];
   const morphology = args["--morphology"] || args["-m"];
@@ -213,7 +212,6 @@ async function main() {
     userRequest,
     inputFile,
     sessionId,
-    mode,
     inputSequence,
     validateRequestLength: true,
     diagramStyle,

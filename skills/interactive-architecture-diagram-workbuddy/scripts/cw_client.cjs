@@ -294,9 +294,8 @@ class CWClient {
     }
   }
 
-  async runGeneration({ userRequest, inputFile = null, sessionId = null, mode = "3", inputSequence = null, validateRequestLength = false, diagramStyle = null, enablePlan = false, n = 1, topK = 1 }) {
+  async runGeneration({ userRequest, inputFile = null, sessionId = null, inputSequence = null, validateRequestLength = false, diagramStyle = null, enablePlan = false, n = 1, topK = 1 }) {
     const payload = {
-      mode,
       input_sequence: inputSequence,
       export_svg: true,
       export_pptx: false,

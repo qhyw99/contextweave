@@ -45,7 +45,6 @@ async function main() {
   const userRequest = args["--user_request"] || args["-u"];
   const inputFile = args["--input_file"] || args["-i"];
   const sessionId = args["--session_id"] || args["-s"];
-  const mode = args["--mode"] || args["-m"] || "3";
   const inputSequenceRaw = args["--input_sequence"];
   const enablePlan = args["--enable_plan"] === "true";
 
@@ -86,7 +85,6 @@ async function main() {
       userRequest,
       inputFile,
       sessionId,
-      mode,
       inputSequence,
       validateRequestLength: true,
       enablePlan,

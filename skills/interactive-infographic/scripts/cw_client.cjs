@@ -184,9 +184,8 @@ class CWClient {
     });
   }
 
-  async runGeneration({ userRequest, inputFile = null, sessionId = null, mode = "3", inputSequence = null, validateRequestLength = false, enablePlan = false }) {
+  async runGeneration({ userRequest, inputFile = null, sessionId = null, inputSequence = null, validateRequestLength = false, enablePlan = false }) {
     const payload = {
-      mode,
       input_sequence: inputSequence,
       export_svg: true,
       export_pptx: false,
