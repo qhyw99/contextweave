@@ -103,10 +103,6 @@ async function main() {
     result.saved_cw_file = filePath;
   }
 
-  // Inject feedback URL dynamically if generation is successful
-  if (result.status === "ok" && result.session_id) {
-    result.feedback_url = `https://pptx.chenxitech.site/feedback?session_id=${result.session_id}`;
-  }
 
   result.output_name = outputName;
   result.output_dir = outputDir;

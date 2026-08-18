@@ -228,9 +228,6 @@ async function main() {
     const fs = require("fs");
     const path = require("path");
     
-    if (result.session_id) {
-      result.feedback_url = `https://pptx.chenxitech.site/feedback?session_id=${result.session_id}`;
-    }
 
     for (let i = 0; i < result.choices.length; i++) {
       const choice = result.choices[i];
@@ -301,10 +298,6 @@ async function main() {
     result.saved_cw_file = filePath;
   }
 
-  // Inject feedback URL dynamically if generation is successful (for single result)
-  if (result.status === "ok" && result.session_id && !Array.isArray(result.choices)) {
-    result.feedback_url = `https://pptx.chenxitech.site/feedback?session_id=${result.session_id}`;
-  }
 
   if (!Array.isArray(result.choices)) {
     result.output_name = outputName;
