@@ -28,6 +28,29 @@ node scripts/export_contextweave_code.cjs --session_id "<session_id>"
 
 不要在对话中粘贴 CW 代码来代替实际导出。
 
+## 导出图形产物
+
+用户要求导出已有会话的图形产物时，调用：
+
+```bash
+node scripts/export_session_asset.cjs \
+  --session_id "<session_id>" \
+  --format "<format>" \
+  --output_name "<语义化英文名>" \
+  --output_dir "<输出目录>"
+```
+
+根据用户的编辑目标选择格式：
+
+| 用户目标 | `format` | 结果特征 |
+|---|---|---|
+| 浏览器、文档或图片方式使用 | `svg` | 通用矢量图 |
+| 沿用旧版 PowerPoint 导出 | `pptx` | 兼容既有链路 |
+| PowerPoint 中保持 SVG 高保真外观 | `pptx-svg` | SVG 作为矢量媒体嵌入 |
+| PowerPoint 中移动节点后连接线仍自动吸附 | `pptx-native` | 原生形状与原生连接器；复杂样式可能降级 |
+
+用户明确要求“可编辑”“可自动连接”“移动节点后连线跟随”时优先选择 `pptx-native`；用户更看重视觉还原时优先选择 `pptx-svg`。不要把普通 SVG“转换为形状”描述为原生连接器。
+
 ## 为节点或连线添加文件链接
 
 绘图与链接设置必须分两步完成：
@@ -59,7 +82,7 @@ node scripts/export_contextweave_code.cjs --session_id "<session_id>"
 | `edit_contextweave.cjs` | 基于 `session_id` 修改已有图或注入链接 |
 | `import_contextweave_code.cjs` | 导入现成 `.cw` |
 | `export_contextweave_code.cjs` | 导出或找回会话中的 CW |
-| `export_session_asset.cjs` | 导出会话产物 |
+| `export_session_asset.cjs` | 导出 SVG、旧版 PPTX、SVG 高保真 PPTX 或原生可连接 PPTX |
 | `recompile_contextweave.cjs` | 轮询专家处理结果；见 [异常恢复](error-recovery.md) |
 | `request_quota_code.cjs` | 发送免费额度验证码；只在相关错误时使用 |
 | `redeem_quota_code.cjs` | 兑换免费额度；只在相关错误时使用 |

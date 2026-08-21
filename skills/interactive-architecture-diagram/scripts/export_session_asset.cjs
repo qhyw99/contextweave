@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 const { CWClient, downloadAssetsLocally, printJson } = require("./cw_client.cjs");
 
+const SUPPORTED_FORMATS = ["svg", "pptx", "pptx-svg", "pptx-native"];
+
 function parseArgs(argv) {
   const args = {};
   for (let i = 0; i < argv.length; i += 1) {
@@ -22,6 +24,8 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   const sessionId = args["--session_id"] || args["-s"];
   const formatName = args["--format"] || args["-f"];
+  const outputName = args["--output_name"] || args["-n"];
+  const outputDir = args["--output_dir"] || args["-o"];
 
   if (!sessionId || !formatName) {
     printJson({
@@ -36,14 +40,14 @@ async function main() {
     process.exit(1);
   }
 
-  if (!["svg", "pptx"].includes(formatName)) {
+  if (!SUPPORTED_FORMATS.includes(formatName)) {
     printJson({
       status: "error",
       error: {
         code: "INVALID_FORMAT",
-        message: "format 仅支持 svg 或 pptx",
+        message: `format 仅支持 ${SUPPORTED_FORMATS.join("、")}`,
         recoverable: true,
-        recovery_hint: "修改 format 参数后重试",
+        recovery_hint: "视觉保真优先使用 pptx-svg；原生形状和自动吸附连接线使用 pptx-native",
       },
     });
     process.exit(1);
@@ -66,6 +70,11 @@ async function main() {
     }
   }
 
+  if (result.status === "ok") {
+    result.format = result.format || formatName;
+    result.output_name = outputName;
+    result.output_dir = outputDir;
+  }
   await downloadAssetsLocally(result);
 
   printJson(result);
@@ -74,4 +83,8 @@ async function main() {
   }
 }
 
-main();
+module.exports = { SUPPORTED_FORMATS };
+
+if (require.main === module) {
+  main();
+}

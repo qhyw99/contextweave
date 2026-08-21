@@ -623,11 +623,14 @@ async function downloadAssetsLocally(result) {
     }
   }
 
-  // Handle pptx_url
-  if (result.pptx_url) {
+  // Handle generation responses (pptx_url) and explicit session exports
+  // whose primary URL is returned as download_url.
+  const pptxFormats = ["pptx", "pptx-svg", "pptx-native"];
+  const pptxUrl = result.pptx_url || (pptxFormats.includes(result.format) ? result.download_url : null);
+  if (pptxUrl) {
     const dest = path.join(targetDir, `${outputName}.pptx`);
     try {
-      await downloadFile(result.pptx_url, dest);
+      await downloadFile(pptxUrl, dest);
       result.saved_pptx_file = dest;
       result.message = (result.message ? result.message + "\n" : "") + `PPTX 资源已自动下载到本地：${dest}`;
     } catch (err) {
