@@ -2,7 +2,7 @@
 name: interactive-architecture-diagram
 slug: contextweave-interactive-architecture
 displayName: 架构图一键生成
-version: 1.2.5
+version: 1.2.6
 summary: 将架构、流程和长文本转换为交互式结构图，并支持原生可编辑 PPTX 导出
 license: MIT
 description: 使用 ContextWeave 生成或修改架构图、流程图、思维导图和复杂信息图。适用于需要从代码、文件或自然语言中提取结构与关系并实际产出 CW、SVG、HTML 或可编辑 PPTX 的请求；未特别说明时，PPTX 使用原生形状与连接器导出。不适用于统计图表、手绘插画或像素级排版。
@@ -84,6 +84,8 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] } } }
 首次生成允许 `# CW` 为空。修改已有图时，将当前 CW 全文放进该代码块。
 
 ### 5. 执行脚本
+
+本任务首次联网前，按 [外部数据传输与授权](references/external-data-consent.md) 简要说明接收方、用途及涉及的数据类别并取得一次明确同意。同一任务内未新增敏感数据类别时不重复询问。
 
 ```bash
 node scripts/generate_contextweave.cjs --input_file "<绝对路径>" --output_name "<语义化英文名>" --output_dir "docs/diagrams"
@@ -202,13 +204,15 @@ node scripts/generate_contextweave.cjs --input_file "<绝对路径>" --output_na
 | 需要拆模块、拆层级或在同一架构上切换链路 | [多视图与 Scenarios](references/multi-view-scenarios.md) |
 | 修改已有图、导入/导出 CW、添加文件链接 | [高级操作](references/advanced-operations.md) |
 | 脚本超时、报错、等待专家处理、额度不足或提交反馈 | [异常恢复](references/error-recovery.md) |
+| 任何准备向 ContextWeave 服务发送数据的操作 | [外部数据传输与授权](references/external-data-consent.md) |
 
 只读取当前任务相关的文档，不要默认加载全部参考资料。
 
 ## 六、协议与安全硬约束
 
-- 任何绘图意图都必须真正落盘并执行脚本；不能只输出语义分析、提示词或命令文本。
-- 默认只向官方服务 `https://pptx.chenxitech.site` 发送绘图必需数据。
+- 只向官方服务 `https://pptx.chenxitech.site` 发送完成任务所需的数据。首次联网前简要说明本任务涉及的数据类别与用途并取得明确同意；未授权时停止在脚本调用前。
+- 一次授权覆盖当前任务内已披露数据类别的生成、修改、导出和轮询，不重复询问。后续新增完整 CW、绝对 `base_path`、邮箱、验证码或反馈内容时，只补充说明新增类别并再确认一次。
+- 用户直接提供数据不等于外发授权。说明时只列类别，不回显完整验证码、CW 全文或绝对路径；获得授权后必须真正落盘并执行脚本。
 - 只读取用户明确指定的输入文件；路径限制在当前工作区，禁止遍历用户目录或无关配置。
 - 正常生成使用内置默认匿名凭据；禁止主动索要 API Key、要求用户配置环境变量或提示鉴权。
 - 遇到脚本错误时读取 [异常恢复](references/error-recovery.md)，不要凭错误名称猜测恢复步骤。
@@ -229,6 +233,7 @@ node scripts/generate_contextweave.cjs --input_file "<绝对路径>" --output_na
 | 10 | 失败后不给用户留下反馈入口 | 异常恢复 | 说明原因，按需收集联系方式并提交反馈 |
 | 11 | 未经确认擅自拆分多视图 | §四 | 先给拆分方案并等待用户确认 |
 | 12 | 意图不明确时把风格决策完全交给后端猜测 | §三 | 只补问会改变结果的选项，并显式传参 |
+| 13 | 把用户提供数据或提出绘图请求视为外发授权 | §六 | 首次联网前简要说明本任务的数据类别与用途，并取得一次明确同意 |
 
 ## 八、输出前自检
 
@@ -238,6 +243,7 @@ node scripts/generate_contextweave.cjs --input_file "<绝对路径>" --output_na
 - [ ] 图只回答一个核心问题；需要拆分时已读取参考文档并获得确认。
 - [ ] `--diagram_style` 与 `--morphology` 已按用户意图显式设置。
 - [ ] 精确主色和高亮色只通过 `base_palette` / `accent_targets` 传递。
+- [ ] 已简要说明本任务的外发数据类别与用途并获得授权；新增敏感类别时已补充确认。
 - [ ] 已真正落盘并执行脚本，最终回复是合法的单个 JSON 对象。
 
 ## 九、常见问题（FAQ）

@@ -6,11 +6,15 @@
 
 从上一轮返回 JSON 中取得 `session_id` 并复用。把当前 CW 全文放入请求文件的 `# CW` 代码块；不要只写“基于上一张图修改”。
 
+若本任务此前只授权了普通生成，修改前按 [外部数据传输与授权](external-data-consent.md) 补充说明会发送完整 `initial_cw_code` 并确认一次；已覆盖该类别时不重复询问。
+
 使用 `edit_contextweave.cjs` 按 `session_id` 提交修改意图。客户端本身无状态，因此旧图上下文必须随请求明确提供。
 
 ## 导入现成 CW
 
 用户明确提供 `.cw` 文件并要求导入时，直接调用：
+
+首次联网前按 [外部数据传输与授权](external-data-consent.md) 简要说明会发送完整 `cw_code` 和来源路径并取得一次授权。
 
 ```bash
 node scripts/import_contextweave_code.cjs --path "<绝对文件路径>"
@@ -22,6 +26,8 @@ node scripts/import_contextweave_code.cjs --path "<绝对文件路径>"
 
 用户要求导出或找回某个 `session_id` 的 CW 代码时，必须调用：
 
+如果本任务尚未获得联网授权，先按 [外部数据传输与授权](external-data-consent.md) 简要说明会发送 `session_id` 以找回云端 CW；已有当前任务授权时不重复询问。
+
 ```bash
 node scripts/export_contextweave_code.cjs --session_id "<session_id>"
 ```
@@ -31,6 +37,8 @@ node scripts/export_contextweave_code.cjs --session_id "<session_id>"
 ## 导出图形产物
 
 用户要求导出已有会话的图形产物时，调用：
+
+如果本任务尚未获得联网授权，先按 [外部数据传输与授权](external-data-consent.md) 简要说明会发送 `session_id` 与目标 `format`；已有当前任务授权时不重复询问。
 
 ```bash
 node scripts/export_session_asset.cjs \
@@ -58,6 +66,8 @@ node scripts/export_session_asset.cjs \
 
 1. 调用 `generate_contextweave.cjs` 生成结构，首次请求忽略链接要求。
 2. 取得 `session_id` 后，调用 `edit_contextweave.cjs` 批量注入链接。
+
+如果首次授权已经包含链接注入，则两步之间不再询问。否则在第二步前补充说明会发送完整 `initial_cw_code` 和绝对 `base_path`，取得一次确认；不回显路径值。用户不同意时停止链接注入，但保留第一步生成的不带链接图形。
 
 第二步的 `# Request` 使用以下 JSON 指令：
 
