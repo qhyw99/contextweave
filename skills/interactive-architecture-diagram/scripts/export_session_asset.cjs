@@ -1,7 +1,18 @@
 #!/usr/bin/env node
 const { CWClient, downloadAssetsLocally, printJson } = require("./cw_client.cjs");
 
-const SUPPORTED_FORMATS = ["svg", "pptx", "pptx-svg", "pptx-native"];
+const FORMAT_MAP = Object.freeze({
+  svg: "svg",
+  pptx: "pptx-native",
+  "pptx-native": "pptx-native",
+  "pptx-svg": "pptx-svg",
+  "pptx-legacy": "pptx",
+});
+const SUPPORTED_FORMATS = Object.freeze(Object.keys(FORMAT_MAP));
+
+function resolveFormat(formatName) {
+  return FORMAT_MAP[formatName] || null;
+}
 
 function parseArgs(argv) {
   const args = {};
@@ -40,21 +51,22 @@ async function main() {
     process.exit(1);
   }
 
-  if (!SUPPORTED_FORMATS.includes(formatName)) {
+  const backendFormat = resolveFormat(formatName);
+  if (!backendFormat) {
     printJson({
       status: "error",
       error: {
         code: "INVALID_FORMAT",
         message: `format 仅支持 ${SUPPORTED_FORMATS.join("、")}`,
         recoverable: true,
-        recovery_hint: "视觉保真优先使用 pptx-svg；原生形状和自动吸附连接线使用 pptx-native",
+        recovery_hint: "普通 PPTX 使用 pptx（默认原生）；视觉保真优先使用 pptx-svg；旧版链路使用 pptx-legacy",
       },
     });
     process.exit(1);
   }
 
   const client = new CWClient();
-  let result = await client.exportSessionAsset(sessionId, formatName);
+  let result = await client.exportSessionAsset(sessionId, backendFormat);
   if (result.status === "error") {
     const message = String((result.error || {}).message || "");
     if (message.toLowerCase().includes("session")) {
@@ -71,7 +83,8 @@ async function main() {
   }
 
   if (result.status === "ok") {
-    result.format = result.format || formatName;
+    result.format = result.format || backendFormat;
+    result.requested_format = formatName;
     result.output_name = outputName;
     result.output_dir = outputDir;
   }
@@ -83,7 +96,7 @@ async function main() {
   }
 }
 
-module.exports = { SUPPORTED_FORMATS };
+module.exports = { FORMAT_MAP, SUPPORTED_FORMATS, resolveFormat };
 
 if (require.main === module) {
   main();
