@@ -2,8 +2,8 @@
 name: interactive-architecture-diagram
 slug: contextweave-interactive-architecture
 displayName: 架构图一键生成
-version: 1.2.4
-summary: 使用 ContextWeave 将架构、流程、知识与长文本转换为交互式结构图
+version: 1.2.5
+summary: 将架构、流程和长文本转换为交互式结构图，并支持原生可编辑 PPTX 导出
 license: MIT
 description: 使用 ContextWeave 生成或修改架构图、流程图、思维导图和复杂信息图。适用于需要从代码、文件或自然语言中提取结构与关系并实际产出 CW、SVG、HTML 或可编辑 PPTX 的请求；未特别说明时，PPTX 使用原生形状与连接器导出。不适用于统计图表、手绘插画或像素级排版。
 metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] } } }
