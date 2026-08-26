@@ -5,15 +5,127 @@ const { URL } = require("url");
 const http = require("http");
 const https = require("https");
 const tls = require("tls");
+const net = require("net");
+
+const PROXY_CONNECT_TIMEOUT_MS = 30000;
+
+function normalizeHostname(hostname) {
+  let normalized = String(hostname || "").trim().toLowerCase();
+  if (normalized.startsWith("[") && normalized.endsWith("]")) {
+    normalized = normalized.slice(1, -1);
+  }
+  return normalized.replace(/\.$/, "");
+}
+
+function effectivePort(targetUrl) {
+  if (targetUrl.port) return targetUrl.port;
+  if (targetUrl.protocol === "https:") return "443";
+  if (targetUrl.protocol === "http:") return "80";
+  return "";
+}
+
+function parseNoProxyEntry(rawEntry) {
+  let entry = String(rawEntry || "").trim().toLowerCase();
+  if (!entry) return null;
+  if (entry === "*") return { wildcard: true };
+
+  let hostname = entry;
+  let port = "";
+
+  if (entry.startsWith("[")) {
+    const closingBracket = entry.indexOf("]");
+    if (closingBracket !== -1) {
+      hostname = entry.slice(1, closingBracket);
+      const remainder = entry.slice(closingBracket + 1);
+      if (/^:\d+$/.test(remainder)) {
+        port = remainder.slice(1);
+      }
+    }
+  } else {
+    const firstColon = entry.indexOf(":");
+    const lastColon = entry.lastIndexOf(":");
+    if (firstColon !== -1 && firstColon === lastColon && /^\d+$/.test(entry.slice(lastColon + 1))) {
+      hostname = entry.slice(0, lastColon);
+      port = entry.slice(lastColon + 1);
+    }
+  }
+
+  hostname = hostname.replace(/^\*\./, "").replace(/^\./, "");
+  hostname = normalizeHostname(hostname);
+  if (!hostname) return null;
+  return { hostname, port };
+}
+
+function hostnameMatchesNoProxy(targetUrl, noProxyValue) {
+  if (!noProxyValue) return false;
+  const targetHostname = normalizeHostname(targetUrl.hostname);
+  const targetPort = effectivePort(targetUrl);
+
+  return String(noProxyValue)
+    .split(/[,\s]+/)
+    .filter(Boolean)
+    .some((rawEntry) => {
+      const entry = parseNoProxyEntry(rawEntry);
+      if (!entry) return false;
+      if (entry.wildcard) return true;
+      if (entry.port && entry.port !== targetPort) return false;
+      if (net.isIP(entry.hostname)) return targetHostname === entry.hostname;
+      return targetHostname === entry.hostname || targetHostname.endsWith(`.${entry.hostname}`);
+    });
+}
 
 function getProxyForUrl(targetUrl) {
+  const noProxy = process.env.NO_PROXY || process.env.no_proxy;
+  if (hostnameMatchesNoProxy(targetUrl, noProxy)) {
+    return null;
+  }
+
   const protocol = targetUrl.protocol;
   if (protocol === "https:") {
-    return process.env.HTTPS_PROXY || process.env.https_proxy;
+    return process.env.HTTPS_PROXY || process.env.https_proxy || null;
   } else if (protocol === "http:") {
-    return process.env.HTTP_PROXY || process.env.http_proxy;
+    return process.env.HTTP_PROXY || process.env.http_proxy || null;
   }
   return null;
+}
+
+function createProxyError(message, code, details = {}) {
+  const error = new Error(message);
+  error.code = code;
+  error.isProxyError = true;
+  error.proxyStage = details.proxyStage || "connect";
+  if (details.proxyStatusCode) {
+    error.proxyStatusCode = details.proxyStatusCode;
+  }
+  return error;
+}
+
+function markProxyError(error) {
+  const marked = error instanceof Error ? error : new Error(String(error));
+  marked.isProxyError = true;
+  marked.proxyStage = marked.proxyStage || "connect";
+  return marked;
+}
+
+function safeProxyErrorMessage(error) {
+  if (error && error.proxyStatusCode) {
+    return `Proxy CONNECT failed with status ${error.proxyStatusCode}`;
+  }
+  if (error && error.code === "EPROXYCONFIG") {
+    return "Invalid proxy configuration";
+  }
+  if (error && error.code === "ETIMEDOUT") {
+    return "Proxy CONNECT timed out";
+  }
+  const detail = String((error && (error.message || error.code)) || "unknown error");
+  return `Proxy connection failed: ${detail}`;
+}
+
+function proxyRecoveryHint(error) {
+  if (error && error.proxyStatusCode === 407) {
+    return "代理要求认证：请检查 HTTPS_PROXY/HTTP_PROXY 中的代理账号配置";
+  }
+  return "请检查 HTTPS_PROXY/HTTP_PROXY；若该目标应直连，请由部署方将目标域名加入 NO_PROXY";
 }
 
 function makeRequest(urlString, options, requestData = null, timeoutMs = 3000000) {
@@ -35,11 +147,23 @@ function makeRequest(urlString, options, requestData = null, timeoutMs = 3000000
       
       class ProxyAgent extends AgentClass {
         createConnection(opts, cb) {
+          let callbackCalled = false;
+          let proxyConnectTimer = null;
+          const done = (error, socket) => {
+            if (callbackCalled) return;
+            callbackCalled = true;
+            if (proxyConnectTimer) clearTimeout(proxyConnectTimer);
+            cb(error, socket);
+          };
+
           let proxyUrl;
           try {
             proxyUrl = new URL(proxyStr);
           } catch (e) {
-            return cb(new Error(`Invalid proxy URL: ${proxyStr}`));
+            return done(createProxyError("Invalid proxy URL configuration", "EPROXYCONFIG"));
+          }
+          if (proxyUrl.protocol !== "http:" && proxyUrl.protocol !== "https:") {
+            return done(createProxyError("Unsupported proxy protocol", "EPROXYCONFIG"));
           }
           
           const isHttpsProxy = proxyUrl.protocol === "https:";
@@ -49,7 +173,7 @@ function makeRequest(urlString, options, requestData = null, timeoutMs = 3000000
             port: proxyUrl.port || (isHttpsProxy ? 443 : 80),
             path: `${targetUrl.hostname}:${targetUrl.port || (isTargetHttps ? 443 : 80)}`,
             headers: {
-              Host: targetUrl.hostname,
+              Host: `${targetUrl.hostname}:${targetUrl.port || (isTargetHttps ? 443 : 80)}`,
             },
           };
 
@@ -59,32 +183,36 @@ function makeRequest(urlString, options, requestData = null, timeoutMs = 3000000
           }
 
           const proxyReq = (isHttpsProxy ? https : http).request(proxyRequestOptions);
+          proxyConnectTimer = setTimeout(() => {
+            proxyReq.destroy(createProxyError("Proxy CONNECT timed out", "ETIMEDOUT"));
+          }, PROXY_CONNECT_TIMEOUT_MS);
 
           proxyReq.on("connect", (res, socket, head) => {
             if (res.statusCode === 200) {
+              if (head && head.length > 0) {
+                socket.unshift(head);
+              }
               if (isTargetHttps) {
                 const tlsSocket = tls.connect({
                   socket: socket,
                   servername: targetUrl.hostname,
                 });
-                tlsSocket.on('error', (err) => {
-                  cb(err);
-                });
-                cb(null, tlsSocket);
+                done(null, tlsSocket);
               } else {
-                cb(null, socket);
+                done(null, socket);
               }
             } else {
-              cb(new Error(`Proxy connection failed: ${res.statusCode}`));
+              socket.destroy();
+              done(createProxyError(
+                `Proxy CONNECT failed with status ${res.statusCode}`,
+                "EPROXYCONNECT",
+                { proxyStatusCode: res.statusCode }
+              ));
             }
           });
 
           proxyReq.on("error", (err) => {
-            cb(err);
-          });
-
-          proxyReq.setTimeout(timeoutMs, () => {
-            proxyReq.destroy(new Error("timeout"));
+            done(markProxyError(err));
           });
 
           proxyReq.end();
@@ -100,15 +228,13 @@ function makeRequest(urlString, options, requestData = null, timeoutMs = 3000000
     });
 
     req.setTimeout(timeoutMs, () => {
-      req.destroy(new Error("timeout"));
+      const timeoutError = new Error("timeout");
+      timeoutError.code = "ETIMEDOUT";
+      req.destroy(timeoutError);
     });
 
     req.on("error", (err) => {
-      if (err.message === "timeout" || err.code === "ECONNRESET") {
-        reject(new Error("timeout"));
-      } else {
-        reject(err);
-      }
+      reject(err);
     });
 
     if (requestData) {
@@ -156,6 +282,7 @@ function sleep(ms) {
 
 function isTransientNetworkError(error) {
   if (!error) return false;
+  if (error.isProxyError && error.proxyStatusCode >= 500) return true;
   if (error.message === "timeout") return true;
   return ["ECONNRESET", "ECONNREFUSED", "EPIPE", "ETIMEDOUT"].includes(error.code);
 }
@@ -257,9 +384,13 @@ class CWClient {
       } catch (error) {
         if (isTransientNetworkError(error) && attempt < this.maxRequestRetries) {
           const waitMs = this.retryBaseMs * Math.pow(2, attempt - 1);
-          process.stderr.write(`[retry ${attempt}/${this.maxRequestRetries}] 网络瞬时故障（${error.message || error.code}），${waitMs / 1000}s 后重试...\n`);
+          const errorLabel = error.isProxyError ? safeProxyErrorMessage(error) : (error.message || error.code);
+          process.stderr.write(`[retry ${attempt}/${this.maxRequestRetries}] 网络瞬时故障（${errorLabel}），${waitMs / 1000}s 后重试...\n`);
           await sleep(waitMs);
           continue;
+        }
+        if (error && error.isProxyError) {
+          return this.error("PROXY_ERROR", safeProxyErrorMessage(error), true, proxyRecoveryHint(error));
         }
         return this.error("API_ERROR", String(error.message || error), true, "请检查网络或后端服务状态后重试");
       }
@@ -336,21 +467,14 @@ class CWClient {
       },
     };
 
-    try {
-      const response = await makeRequest(urlString, requestOptions, requestData, this.timeoutMs);
-      const responseBody = await readBody(response);
+    const response = await makeRequest(urlString, requestOptions, requestData, this.timeoutMs);
+    const responseBody = await readBody(response);
 
-      return {
-        statusCode: response.statusCode,
-        statusMessage: response.statusMessage,
-        body: responseBody,
-      };
-    } catch (error) {
-      if (error.message === "timeout") {
-        throw new Error("timeout");
-      }
-      throw error;
-    }
+    return {
+      statusCode: response.statusCode,
+      statusMessage: response.statusMessage,
+      body: responseBody,
+    };
   }
 
   async runGeneration({ userRequest, inputFile = null, sessionId = null, inputSequence = null, validateRequestLength = false, diagramStyle = null, morphology = null, accentTargets = null, basePalette = null, enablePlan = false, n = 1, topK = 1 }) {
@@ -619,7 +743,8 @@ async function downloadAssetsLocally(result) {
       result.saved_svg_file = dest;
       result.message = (result.message ? result.message + "\n" : "") + `资源已自动下载到本地：${dest}`;
     } catch (err) {
-      // Silently fail or log error
+      if (!Array.isArray(result.warnings)) result.warnings = [];
+      result.warnings.push(`SVG/HTML 资源下载失败：${err && err.isProxyError ? safeProxyErrorMessage(err) : String(err.message || err)}`);
     }
   }
 
@@ -634,7 +759,8 @@ async function downloadAssetsLocally(result) {
       result.saved_pptx_file = dest;
       result.message = (result.message ? result.message + "\n" : "") + `PPTX 资源已自动下载到本地：${dest}`;
     } catch (err) {
-      // Silently fail or log error
+      if (!Array.isArray(result.warnings)) result.warnings = [];
+      result.warnings.push(`PPTX 资源下载失败：${err && err.isProxyError ? safeProxyErrorMessage(err) : String(err.message || err)}`);
     }
   }
 
@@ -646,4 +772,8 @@ module.exports = {
   normalizeAssetResult,
   downloadAssetsLocally,
   printJson,
+  _internals: {
+    getProxyForUrl,
+    hostnameMatchesNoProxy,
+  },
 };

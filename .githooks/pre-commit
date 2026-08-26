@@ -1,0 +1,30 @@
+#!/usr/bin/env sh
+set -eu
+
+repo_root="$(git rev-parse --show-toplevel)"
+release_script="$repo_root/skills/skillhub-safe-release/scripts/skillhub_release.py"
+configured_python="$(git config --local --get skillhub.python 2>/dev/null || true)"
+
+if [ ! -f "$release_script" ]; then
+  echo "SkillHub gate error: missing $release_script" >&2
+  exit 1
+fi
+
+if [ -n "$configured_python" ] && [ -x "$configured_python" ]; then
+  exec "$configured_python" "$release_script" hook
+fi
+
+if command -v python3 >/dev/null 2>&1; then
+  exec python3 "$release_script" hook
+fi
+
+if command -v python >/dev/null 2>&1; then
+  exec python "$release_script" hook
+fi
+
+if command -v py >/dev/null 2>&1; then
+  exec py -3 "$release_script" hook
+fi
+
+echo "SkillHub gate error: Python was not found. Run the install-hook command again with a working Python interpreter." >&2
+exit 1

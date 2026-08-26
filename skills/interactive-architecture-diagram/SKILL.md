@@ -2,7 +2,7 @@
 name: interactive-architecture-diagram
 slug: contextweave-interactive-architecture
 displayName: 架构图一键生成
-version: 1.2.6
+version: 1.2.7
 summary: 将架构、流程和长文本转换为交互式结构图，并支持原生可编辑 PPTX 导出
 license: MIT
 description: 使用 ContextWeave 生成或修改架构图、流程图、思维导图和复杂信息图。适用于需要从代码、文件或自然语言中提取结构与关系并实际产出 CW、SVG、HTML 或可编辑 PPTX 的请求；未特别说明时，PPTX 使用原生形状与连接器导出。不适用于统计图表、手绘插画或像素级排版。
@@ -256,8 +256,9 @@ node scripts/generate_contextweave.cjs --input_file "<绝对路径>" --output_na
 
 ### 2. 网络超时怎么办？
 
-- `API_ERROR` 已由脚本执行 3 次指数退避重试。
-- 仍失败通常表示云端负载或本地网络异常。告知用户当前服务繁忙；需要收集联系方式与提交反馈时，使用 [异常恢复](references/error-recovery.md) 的流程。
+- 服务端 5xx 与超时、连接重置等瞬时网络错误会由脚本执行最多 3 次指数退避重试；配置、认证等确定性错误不会重试。
+- 出现 `PROXY_ERROR` 时检查 `HTTPS_PROXY` / `HTTP_PROXY`；目标应直连时，由部署方将目标域名加入 `NO_PROXY`。
+- 瞬时错误重试后仍失败通常表示云端负载或本地网络异常。需要收集联系方式与提交反馈时，使用 [异常恢复](references/error-recovery.md) 的流程。
 
 ### 3. 不支持哪些图表类型？
 

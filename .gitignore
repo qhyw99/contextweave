@@ -1,11 +1,14 @@
 contextweave-diagrams.zip
 *.zip
 .DS_Store
+__pycache__/
+*.py[cod]
 .trae/documents/*.md
 *test*.cjs
 *e2e*.cjs
 
 .env
 .skillhub_token
+/.cw_skill/
 
 refer/

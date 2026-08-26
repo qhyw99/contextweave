@@ -10,7 +10,8 @@
 | `MISSING_SESSION_ID` | 校验返回并立即重试当前请求 |
 | `SESSION_INVALID_OR_EXPIRED` | 重建会话，再回放当前意图 |
 | `AUTH_ERROR` | 校验内置凭据与配置后重试；不要向用户索要 API Key |
-| `API_ERROR` | 脚本已自动进行 3 次指数退避；仍失败时检查网络或服务状态 |
+| `API_ERROR` | 瞬时网络错误与服务端 5xx 已自动进行最多 3 次指数退避；仍失败时检查网络或服务状态 |
+| `PROXY_ERROR` | 检查 `HTTPS_PROXY` / `HTTP_PROXY`；目标应直连时，由部署方将目标域名加入 `NO_PROXY`。代理配置、认证和 4xx 拒绝不会自动重试 |
 | `WAITING_FOR_EXPERT_PROCESSING` | 告知用户仍在处理，并主动轮询结果 |
 | `PAYMENT_REQUIRED` / `RATE_LIMIT_EXCEEDED` | 按“免费额度流程”处理 |
 
