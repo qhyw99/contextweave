@@ -1,0 +1,39 @@
+#!/usr/bin/env sh
+set -eu
+
+repo_root="$(git rev-parse --show-toplevel)"
+release_script="$repo_root/skills/skillhub-safe-release/scripts/contextweave_release.py"
+configured_python="$(git config --local --get skillhub.python 2>/dev/null || true)"
+auto_release="$(git config --local --bool --get skillhub.contextweaveAutoRelease 2>/dev/null || true)"
+
+if [ "$auto_release" != "true" ]; then
+  exit 0
+fi
+
+if ! git show --format= --name-only HEAD -- skills/interactive-architecture-diagram | grep -q .; then
+  exit 0
+fi
+
+if [ ! -f "$release_script" ]; then
+  echo "ContextWeave release error: missing $release_script" >&2
+  exit 1
+fi
+
+if [ -n "$configured_python" ] && [ -x "$configured_python" ]; then
+  exec "$configured_python" "$release_script" auto-release
+fi
+
+if command -v python3 >/dev/null 2>&1; then
+  exec python3 "$release_script" auto-release
+fi
+
+if command -v python >/dev/null 2>&1; then
+  exec python "$release_script" auto-release
+fi
+
+if command -v py >/dev/null 2>&1; then
+  exec py -3 "$release_script" auto-release
+fi
+
+echo "ContextWeave release error: Python was not found. Run enable-auto-release again." >&2
+exit 1

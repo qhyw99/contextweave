@@ -233,12 +233,26 @@ def run_skillhub(repo: Path, skill: Skill, *, dry_run: bool) -> dict[str, object
         )
 
     payload = parse_json_output(result.stdout)
-    if payload.get("slug") != skill.slug or payload.get("version") != skill.version:
-        raise ReleaseError(
-            f"SkillHub returned unexpected identity for {skill.identity}: {payload}"
-        )
-    if not dry_run and payload.get("ok") is not True:
-        raise ReleaseError(f"SkillHub did not confirm publication for {skill.identity}: {payload}")
+    returned_slug = str(payload.get("slug") or "").strip()
+    returned_version = str(payload.get("version") or "").strip()
+    if dry_run:
+        if returned_slug != skill.slug or returned_version != skill.version:
+            raise ReleaseError(
+                f"SkillHub returned unexpected identity for {skill.identity}: {payload}"
+            )
+    else:
+        # The official CLI exits successfully only after a 2xx publish response. Different
+        # SkillHub API revisions return either ok/success flags or only status/skillId.
+        if returned_slug and returned_slug != skill.slug:
+            raise ReleaseError(
+                f"SkillHub returned unexpected slug for {skill.identity}: {payload}"
+            )
+        if returned_version and returned_version != skill.version:
+            raise ReleaseError(
+                f"SkillHub returned unexpected version for {skill.identity}: {payload}"
+            )
+        if payload.get("ok") is False or payload.get("success") is False:
+            raise ReleaseError(f"SkillHub did not accept publication for {skill.identity}: {payload}")
     return payload
 
 

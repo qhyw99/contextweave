@@ -2,7 +2,7 @@
 name: skillhub-safe-release
 description: Safely validate and release SkillHub skills with staged dry-run hooks and explicit approval before Git push and publishing, including synchronized ContextWeave backend version deployment. Use for SkillHub release preparation or execution; do not use for unrelated Git pushes.
 slug: skillhub-safe-release
-version: 1.1.0
+version: 1.2.0
 displayName: SkillHub Safe Release
 summary: Gate SkillHub releases and keep ContextWeave backend version requirements synchronized.
 tags:
@@ -15,16 +15,18 @@ homepage: https://skillhub.cn
 
 # SkillHub Safe Release
 
-Use the bundled script to keep validation automatic and remote mutations human-controlled.
+Use the bundled scripts to validate releases, wait for SkillHub approval, and deploy a synchronized backend version.
 
 ## Safety invariants
 
-- A Git hook may validate only. It must never push Git commits or publish a Skill.
+- The pre-commit hook validates only. It must never push Git commits or publish a Skill.
+- ContextWeave post-commit automation is opt-in. Enable it only after the user explicitly authorizes future Skill Git pushes, SkillHub publications, and synchronized backend deployments from this repository.
 - Run SkillHub `dry-run` against the staged snapshot when invoked by `pre-commit`, not against unrelated unstaged files.
 - Before a real release, rerun `dry-run` and require the target Skill files to be committed.
 - Never run `release --confirm push-and-publish` unless the user has explicitly approved both the Git push and SkillHub publication in the current conversation.
-- Never run the ContextWeave coordinated release unless the user has explicitly approved the Git push, SkillHub publication, and backend deployment in the current conversation.
+- Never run a manual ContextWeave coordinated release unless the user has explicitly approved the Git push, SkillHub publication, and backend deployment in the current conversation. A later post-commit run may instead rely on the repository's persistent opt-in created by `enable-auto-release`.
 - Push Git first. If it fails, stop without publishing to SkillHub.
+- Never deploy the backend until the exact published Skill version appears in SkillHub's public search results. A pending or rejected version must time out without deployment.
 - Never print, persist in the repository, or commit an API key. Use an existing `skillhub login` session or the official credential store.
 
 ## Setup
@@ -35,7 +37,7 @@ From the target repository root, install the tracked hook:
 python skills/skillhub-safe-release/scripts/skillhub_release.py install-hook
 ```
 
-This sets the repository-local `core.hooksPath` and records the current Python executable for cross-platform hook execution.
+This sets the repository-local `core.hooksPath` and records the current Python executable for cross-platform hook execution. It does not enable post-commit release automation.
 
 ## Dry-run
 
@@ -80,13 +82,43 @@ Review and commit the Skill changes in `infographic-contextweave/main` and the v
 python skills/skillhub-safe-release/scripts/contextweave_release.py preflight
 ```
 
-After the user explicitly approves the Git push, SkillHub publication, and backend deployment, run:
+After the user explicitly approves the Git push, SkillHub publication, approval wait, and backend deployment, run:
 
 ```bash
 python skills/skillhub-safe-release/scripts/contextweave_release.py release --confirm push-publish-and-deploy
 ```
 
-The wrapper pushes and publishes the Skill first, then delegates the backend update to `ops/deploy.ps1 interleaved-thinking`. A dirty server worktree, wrong branch, failed push, failed SkillHub publication, or failed deployment preflight stops the workflow without fallback or force operations.
+The wrapper runs this sequence:
+
+1. Validate the Skill and synchronized backend version.
+2. Push the Skill source branch and publish the exact version to SkillHub.
+3. Poll SkillHub's public search endpoint every 30 seconds, for up to 30 minutes by default.
+4. Only after the exact version is publicly visible, run the backend deployment preflight and deploy `interleaved-thinking`.
+
+A dirty server worktree, wrong branch, failed push, failed publication, approval timeout, or failed deployment preflight stops the workflow without fallback or force operations. Rerunning `release` after the exact version is already public skips duplicate publication and resumes at the deployment gate.
+
+## Opt-in post-commit workflow
+
+For this ContextWeave repository only, the user can authorize future matching commits to run the same blocking workflow automatically:
+
+```bash
+python skills/skillhub-safe-release/scripts/contextweave_release.py enable-auto-release
+```
+
+The tracked `post-commit` hook ignores commits that do not change `skills/interactive-architecture-diagram`. For matching commits it synchronizes and, when needed, commits only `interleaved-thinking/config.yaml`; then it pushes, publishes, waits for public approval, and deploys. The commit command remains open while approval polling runs, so failures are visible and no overlapping background release is created. The Skill version must be bumped before each published content change.
+
+Disable the persistent opt-in with:
+
+```bash
+python skills/skillhub-safe-release/scripts/contextweave_release.py disable-auto-release
+```
+
+To wait or resume manually without publishing again:
+
+```bash
+python skills/skillhub-safe-release/scripts/contextweave_release.py wait-for-approval
+python skills/skillhub-safe-release/scripts/contextweave_release.py release --confirm push-publish-and-deploy
+```
 
 ## Failures
 
