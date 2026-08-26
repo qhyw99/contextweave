@@ -292,6 +292,9 @@ def run_checks(source_repo: Path, downstream_path: str | None) -> None:
 
     commands = [
         ["node", "--check", str(SOURCE_SKILL / "scripts" / "cw_client.cjs")],
+        ["node", "--check", str(SOURCE_SKILL / "scripts" / "update_skill.cjs")],
+        ["node", "tests/update_skill_scripts_test.js"],
+        ["node", "tests/cw_client_version_recovery_test.js"],
         ["node", "tests/cw_client_proxy_test.js"],
         ["node", "tests/export_session_asset_formats_test.js"],
         ["node", "tests/normalize_asset_result_test.js"],

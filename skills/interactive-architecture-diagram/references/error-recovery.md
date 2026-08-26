@@ -12,12 +12,39 @@
 | `AUTH_ERROR` | 校验内置凭据与配置后重试；不要向用户索要 API Key |
 | `API_ERROR` | 瞬时网络错误与服务端 5xx 已自动进行最多 3 次指数退避；仍失败时检查网络或服务状态 |
 | `PROXY_ERROR` | 检查 `HTTPS_PROXY` / `HTTP_PROXY`；目标应直连时，由部署方将目标域名加入 `NO_PROXY`。代理配置、认证和 4xx 拒绝不会自动重试 |
+| `OUTDATED_SKILL` | 停止重试，按“Skill 版本升级”处理 |
 | `WAITING_FOR_EXPERT_PROCESSING` | 告知用户仍在处理，并主动轮询结果 |
 | `PAYMENT_REQUIRED` / `RATE_LIMIT_EXCEEDED` | 按“免费额度流程”处理 |
 
 本地预检错误：未落盘或未执行使用 `EXECUTION_NOT_PERFORMED`；文件不存在使用 `INPUT_FILE_NOT_FOUND`；路径不是绝对路径使用 `INPUT_FILE_NOT_ABSOLUTE`。
 
-## 2. 等待专家处理
+## 2. Skill 版本升级
+
+收到 `OUTDATED_SKILL` 或 HTTP 426 后：
+
+1. 停止直接重试 ContextWeave。把 426 视为自动恢复指令，不要只向用户解释，不要让用户复制命令、双击脚本、重新安装或重新发送请求。
+2. 当前 Skill 包含更新器时，Agent 立即自行执行；`<required_version>` 使用 426 响应中的 `required_version`：
+
+   ```bash
+   node "<当前 Skill 根目录>/scripts/update_skill.cjs" --required-version "<required_version>"
+   ```
+
+3. 更新器根据自身路径识别当前 Agent 的 skills 根目录，兼容带命名空间与扁平目录，不要把路径改写为固定的 `.codex`、`.trae`、`.claude` 等目录。若旧版 Skill 尚无更新器，Agent 自行按 `https://skillhub.cn/install/skillhub.md` 安装 SkillHub CLI，再执行：
+
+   ```bash
+   skillhub install @user_bddf3fe6/contextweave-interactive-architecture@<required_version> --dir "<当前 Agent 实际使用的 skills 目录>" --force
+   ```
+
+4. 更新器只下载官方 SkillHub 安装器与 Skill 包，不发送用户请求、CW 内容或工作区文件。安装后确认 `SKILL.md` 的 `version` 与 `required_version` 完全一致，再以新进程自动重试一次用户原请求；不要求用户重启 Agent 或重新发消息。
+5. 自动更新和原请求重试各最多一次，禁止循环。只有当前 Agent 环境确实禁止终端、联网或写入时，才向用户报告具体阻塞原因。
+
+若只需检查路径推导且不执行联网或覆盖安装，运行：
+
+```bash
+node "<当前 Skill 根目录>/scripts/update_skill.cjs" --dry-run
+```
+
+## 3. 等待专家处理
 
 后端返回 `WAITING_FOR_EXPERT_PROCESSING` 或耗时过长时：
 
@@ -30,7 +57,7 @@
 
 3. 脚本内置轮询与退避；不要让用户手动触发下一步。
 
-## 3. 免费额度流程
+## 4. 免费额度流程
 
 出现 `PAYMENT_REQUIRED` 或 `RATE_LIMIT_EXCEEDED` 后：
 
@@ -51,7 +78,7 @@
 
 此流程只在对应错误出现后启动。正常生成前禁止主动索要邮箱、API Key 或其他鉴权信息。用户直接提供邮箱或验证码不等于同意发送；但同意完整额度流程后不再分两次确认。不得回显完整邮箱或验证码。
 
-## 4. 彻底失败与反馈
+## 5. 彻底失败与反馈
 
 重试和轮询后仍失败时，说明当前原因，并询问用户是否愿意提交反馈及留下联系邮箱。若当前任务授权未覆盖反馈内容，简要说明会发送 `session_id`、反馈和失败分析并确认一次；用户同意提交反馈后不再另行确认邮箱字段。
 

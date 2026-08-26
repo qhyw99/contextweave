@@ -2,7 +2,7 @@
 name: interactive-architecture-diagram
 slug: contextweave-interactive-architecture
 displayName: 架构图一键生成
-version: 1.2.7
+version: 1.2.8
 summary: 将架构、流程和长文本转换为交互式结构图，并支持原生可编辑 PPTX 导出
 license: MIT
 description: 使用 ContextWeave 生成或修改架构图、流程图、思维导图和复杂信息图。适用于需要从代码、文件或自然语言中提取结构与关系并实际产出 CW、SVG、HTML 或可编辑 PPTX 的请求；未特别说明时，PPTX 使用原生形状与连接器导出。不适用于统计图表、手绘插画或像素级排版。
@@ -250,6 +250,7 @@ node scripts/generate_contextweave.cjs --input_file "<绝对路径>" --output_na
 
 ### 1. 报错如何处理？
 
+- **Skill 版本缺失或不兼容**：出现 `OUTDATED_SKILL` 时停止直接重试，读取 [异常恢复](references/error-recovery.md) 的“Skill 版本升级”流程，由 Agent 自动更新到服务端要求版本并以新进程重试一次；不要把更新步骤转交给用户。
 - **生成超时或等待过长**：遇到 `WAITING_FOR_EXPERT_PROCESSING` 或生成耗时较长时，说明系统正在处理复杂结构。主动调用 `recompile_contextweave.cjs` 轮询，同时简短告知用户仍在处理。
 - **解析错误或执行失败**：检查输入文本、绝对路径和请求长度。连续失败时可简化请求或引导重试。
 - **额度不足**：出现 `PAYMENT_REQUIRED` 或 `RATE_LIMIT_EXCEEDED` 时，按 [异常恢复](references/error-recovery.md) 的验证码流程处理，不要提前索要凭据。

@@ -15,7 +15,7 @@ import contextweave_release as context_release  # noqa: E402
 import skillhub_release  # noqa: E402
 
 
-def _skill(version="1.2.7"):
+def _skill(version="1.2.8"):
     return skillhub_release.Skill(
         path=REPO_ROOT / "skills" / "interactive-architecture-diagram",
         slug="contextweave-interactive-architecture",
@@ -44,7 +44,7 @@ def test_public_skill_version_matches_namespaced_search_result(monkeypatch):
             {
                 "slug": "@user_bddf3fe6/contextweave-interactive-architecture",
                 "publicSlug": "contextweave-interactive-architecture",
-                "version": "1.2.7",
+                "version": "1.2.8",
             }
         ]
     }
@@ -54,11 +54,11 @@ def test_public_skill_version_matches_namespaced_search_result(monkeypatch):
         lambda request, timeout: FakeResponse(payload),
     )
 
-    assert context_release.public_skill_version(_skill()) == "1.2.7"
+    assert context_release.public_skill_version(_skill()) == "1.2.8"
 
 
 def test_wait_for_approval_sleeps_until_exact_version_is_public(monkeypatch):
-    observed = iter(["1.2.6", "1.2.6", "1.2.7"])
+    observed = iter(["1.2.7", "1.2.7", "1.2.8"])
     sleeps = []
     monkeypatch.setattr(
         context_release, "public_skill_version", lambda skill: next(observed)

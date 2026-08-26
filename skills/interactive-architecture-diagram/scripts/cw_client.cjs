@@ -409,12 +409,24 @@ class CWClient {
         let parsed = {};
         try { parsed = JSON.parse(response.body); } catch(e) {}
         const detail = parsed.detail || {};
-        return this.error(
+        const result = this.error(
           detail.code || "OUTDATED_SKILL",
           detail.message || "Skill版本已过期",
           true,
           detail.recovery_hint || "请下载最新版本"
         );
+        for (const key of [
+          "reason",
+          "required_version",
+          "current_version",
+          "skill",
+          "recovery",
+        ]) {
+          if (Object.prototype.hasOwnProperty.call(detail, key)) {
+            result.error[key] = detail[key];
+          }
+        }
+        return result;
       }
       if (response.statusCode === 429) {
         let errorMsg = "Too Many Requests";
