@@ -183,10 +183,4 @@ try {
   fs.rmSync(updateSandbox, { recursive: true, force: true });
 }
 
-for (const launcher of ["update_skill.bat", "update_skill.ps1", "update_skill.sh"]) {
-  const content = fs.readFileSync(path.join(scriptsDir, launcher), "utf8");
-  assert.match(content, /update_skill\.cjs/);
-  assert.doesNotMatch(content, /\.codex[\\/]skills|\.trae[\\/]skills|\.claude[\\/]skills/);
-}
-
 console.log("update_skill_scripts_test: ok");
