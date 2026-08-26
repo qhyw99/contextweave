@@ -1,4 +1,5 @@
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -142,3 +143,75 @@ def test_publish_accepts_official_status_only_success_payload(tmp_path, monkeypa
     monkeypatch.setattr(skillhub_release, "run", lambda *args, **kwargs: completed)
 
     assert skillhub_release.run_skillhub(tmp_path, skill, dry_run=False) == payload
+
+
+def test_post_commit_hook_triggers_only_for_main_skill(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "config", "user.email", "contextweave-test@example.invalid"],
+        cwd=repo,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "ContextWeave Test"], cwd=repo, check=True
+    )
+
+    hook_dir = repo / ".githooks"
+    hook_dir.mkdir()
+    hook = hook_dir / "post-commit"
+    shutil.copy2(REPO_ROOT / ".githooks" / "post-commit", hook)
+    hook.chmod(0o755)
+
+    fake_release = (
+        repo
+        / "skills"
+        / "skillhub-safe-release"
+        / "scripts"
+        / "contextweave_release.py"
+    )
+    fake_release.parent.mkdir(parents=True)
+    fake_release.write_text(
+        "from pathlib import Path\n"
+        "import sys\n"
+        "Path('hook-ran.txt').write_text(sys.argv[1], encoding='utf-8')\n",
+        encoding="utf-8",
+    )
+
+    subprocess.run(["git", "config", "core.hooksPath", ".githooks"], cwd=repo, check=True)
+    subprocess.run(
+        ["git", "config", "skillhub.python", Path(sys.executable).as_posix()],
+        cwd=repo,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "config", "skillhub.contextweaveAutoRelease", "true"],
+        cwd=repo,
+        check=True,
+    )
+
+    target = repo / "skills" / "interactive-architecture-diagram" / "SKILL.md"
+    target.parent.mkdir(parents=True)
+    target.write_text("version: 9.9.9\n", encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=repo, check=True)
+    subprocess.run(
+        ["git", "commit", "-m", "test target skill"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
+    marker = repo / "hook-ran.txt"
+    assert marker.read_text(encoding="utf-8") == "auto-release"
+
+    marker.unlink()
+    unrelated = repo / "notes.txt"
+    unrelated.write_text("unrelated\n", encoding="utf-8")
+    subprocess.run(["git", "add", "notes.txt"], cwd=repo, check=True)
+    subprocess.run(
+        ["git", "commit", "-m", "test unrelated"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
+    assert not marker.exists()
