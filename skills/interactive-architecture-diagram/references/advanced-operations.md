@@ -48,17 +48,19 @@ node scripts/export_session_asset.cjs \
   --output_dir "<输出目录>"
 ```
 
-根据用户的编辑目标选择格式。用户只说“导出 PPTX”而没有指定实现形式时，使用 `pptx`；脚本会将它确定性地映射为原生 PPTX 导出：
+根据用户的编辑目标选择格式。用户只说“导出 PPTX”而没有指定实现形式时，使用 `pptx`；用户只说“导出 Visio/VSDX”时，使用 `vsdx`。脚本会将这两个默认值确定性地映射为对应的原生 Office 导出：
 
 | 用户目标 | `format` | 结果特征 |
 |---|---|---|
 | 浏览器、文档或图片方式使用 | `svg` | 通用矢量图 |
+| 默认导出 Visio | `vsdx` | 默认映射为原生二维形状与双端粘附的一维连接器 |
+| 明确指定原生 Visio | `vsdx-native` | 与 `vsdx` 等效；保留当前图的路由几何并支持原生编辑 |
 | 默认导出 PowerPoint | `pptx` | 默认映射为原生形状与原生连接器 |
 | 明确指定原生 PowerPoint | `pptx-native` | 与 `pptx` 等效；原生形状与原生连接器 |
 | PowerPoint 中保持 SVG 高保真外观 | `pptx-svg` | SVG 作为矢量媒体嵌入 |
 | 必须沿用旧版 PowerPoint 导出链路 | `pptx-legacy` | 映射到后端旧版 `pptx` 格式，仅用于兼容 |
 
-默认原生导出支持移动节点后连接线继续吸附，但复杂样式可能降级。用户更看重视觉还原并明确接受非原生连接器时才选择 `pptx-svg`；只有明确要求兼容旧链路时才选择 `pptx-legacy`。不要把普通 SVG“转换为形状”描述为原生连接器。
+默认原生 PPTX 与 VSDX 导出支持移动节点后连接线继续吸附，但复杂样式可能降级。用户更看重 PowerPoint 视觉还原并明确接受非原生连接器时才选择 `pptx-svg`；只有明确要求兼容旧链路时才选择 `pptx-legacy`。不要把普通 SVG“转换为形状”描述为原生连接器，也不要把 PPTX 改扩展名描述为 Visio 导出。
 
 ## 为节点或连线添加文件链接
 
@@ -93,7 +95,7 @@ node scripts/export_session_asset.cjs \
 | `edit_contextweave.cjs` | 基于 `session_id` 修改已有图或注入链接 |
 | `import_contextweave_code.cjs` | 导入现成 `.cw` |
 | `export_contextweave_code.cjs` | 导出或找回会话中的 CW |
-| `export_session_asset.cjs` | 导出 SVG、默认原生可连接 PPTX、SVG 高保真 PPTX 或旧版兼容 PPTX |
+| `export_session_asset.cjs` | 导出 SVG、原生可编辑 VSDX、默认原生可连接 PPTX、SVG 高保真 PPTX 或旧版兼容 PPTX |
 | `recompile_contextweave.cjs` | 轮询专家处理结果；见 [异常恢复](error-recovery.md) |
 | `request_quota_code.cjs` | 发送免费额度验证码；只在相关错误时使用 |
 | `redeem_quota_code.cjs` | 兑换免费额度；只在相关错误时使用 |

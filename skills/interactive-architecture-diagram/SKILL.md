@@ -2,10 +2,10 @@
 name: interactive-architecture-diagram
 slug: contextweave-interactive-architecture
 displayName: 架构图一键生成
-version: 1.2.8
-summary: 将架构、流程和长文本转换为交互式结构图，并支持原生可编辑 PPTX 导出
+version: 1.2.9
+summary: 将架构、流程和长文本转换为交互式结构图，并支持原生可编辑 PPTX 与 Visio 导出
 license: MIT
-description: 使用 ContextWeave 生成或修改架构图、流程图、思维导图和复杂信息图。适用于需要从代码、文件或自然语言中提取结构与关系并实际产出 CW、SVG、HTML 或可编辑 PPTX 的请求；未特别说明时，PPTX 使用原生形状与连接器导出。不适用于统计图表、手绘插画或像素级排版。
+description: 使用 ContextWeave 生成或修改架构图、流程图、思维导图和复杂信息图。适用于需要从代码、文件或自然语言中提取结构与关系并实际产出 CW、SVG、HTML、可编辑 PPTX 或原生 VSDX 的请求；未特别说明时，PPTX 与 Visio 使用原生形状和连接器导出。不适用于统计图表、手绘插画或像素级排版。
 metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] } } }
 ---
 
@@ -96,6 +96,7 @@ node scripts/generate_contextweave.cjs --input_file "<绝对路径>" --output_na
 - `user_request` 默认长度为 50-5000 字符，可由 `CONTEXTWEAVE_MIN_REQUEST_LENGTH` / `CONTEXTWEAVE_MAX_REQUEST_LENGTH` 调整。
 - 已确定的呈现逻辑、构图范式和精确配色必须按第三节显式传参。
 - 脚本会保存 `<output_name>.cw`，并下载 SVG/HTML 产物。
+- 用户要求 Visio/VSDX 时，取得 `session_id` 后读取 [高级操作](references/advanced-operations.md)，调用 `export_session_asset.cjs --format vsdx`；不要用 PPTX 或嵌入 SVG 冒充原生 Visio。
 
 ### 6. 按固定格式回复
 

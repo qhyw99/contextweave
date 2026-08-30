@@ -3,6 +3,8 @@ const { CWClient, downloadAssetsLocally, printJson } = require("./cw_client.cjs"
 
 const FORMAT_MAP = Object.freeze({
   svg: "svg",
+  vsdx: "vsdx-native",
+  "vsdx-native": "vsdx-native",
   pptx: "pptx-native",
   "pptx-native": "pptx-native",
   "pptx-svg": "pptx-svg",
@@ -59,7 +61,7 @@ async function main() {
         code: "INVALID_FORMAT",
         message: `format 仅支持 ${SUPPORTED_FORMATS.join("、")}`,
         recoverable: true,
-        recovery_hint: "普通 PPTX 使用 pptx（默认原生）；视觉保真优先使用 pptx-svg；旧版链路使用 pptx-legacy",
+        recovery_hint: "普通 Visio 使用 vsdx（默认原生）；普通 PPTX 使用 pptx（默认原生）；视觉保真优先使用 pptx-svg；旧版链路使用 pptx-legacy",
       },
     });
     process.exit(1);

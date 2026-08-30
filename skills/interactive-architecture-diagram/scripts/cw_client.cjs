@@ -776,6 +776,22 @@ async function downloadAssetsLocally(result) {
     }
   }
 
+  // Handle native Visio session exports. The backend returns the primary
+  // asset through download_url, matching the explicit PPTX export contract.
+  const vsdxFormats = ["vsdx", "vsdx-native"];
+  const vsdxUrl = result.vsdx_url || (vsdxFormats.includes(result.format) ? result.download_url : null);
+  if (vsdxUrl) {
+    const dest = path.join(targetDir, `${outputName}.vsdx`);
+    try {
+      await downloadFile(vsdxUrl, dest);
+      result.saved_vsdx_file = dest;
+      result.message = (result.message ? result.message + "\n" : "") + `VSDX 资源已自动下载到本地：${dest}`;
+    } catch (err) {
+      if (!Array.isArray(result.warnings)) result.warnings = [];
+      result.warnings.push(`VSDX 资源下载失败：${err && err.isProxyError ? safeProxyErrorMessage(err) : String(err.message || err)}`);
+    }
+  }
+
   return result;
 }
 
