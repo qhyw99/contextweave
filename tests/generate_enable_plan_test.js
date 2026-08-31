@@ -63,10 +63,14 @@ async function mainTest() {
   }
 
   const skill = fs.readFileSync(path.join(skillRoot, "SKILL.md"), "utf8");
-  assert.match(skill, /用户明确要求分层（layered）或网格（grid）式布局/);
-  assert.match(skill, /构图范式选择 `--morphology container`/);
-  assert.match(skill, /纵向、从上到下的步骤流[\s\S]*不传 `--enable_plan`/);
+  assert.match(skill, /^version: 1\.2\.11$/m);
+  assert.match(skill, /分层（layered）或网格（grid）容器骨架/);
+  assert.match(skill, /中央或单侧主链配固定的左右\/平行说明栏[\s\S]*logic \+ flow \+ --enable_plan/);
+  assert.match(skill, /紧凑、平衡或多行的阶段网格[\s\S]*logic \+ flow \+ --enable_plan/);
+  assert.match(skill, /普通单轴纵向\/横向流程不传 `--enable_plan`/);
+  assert.match(skill, /节点数、阶段数、文本长度或内容复杂度本身不得触发 `--enable_plan`/);
   assert.match(skill, /generate_contextweave\.cjs[^\n]*--morphology container[^\n]*--enable_plan/);
+  assert.match(skill, /generate_contextweave\.cjs[^\n]*--morphology flow[^\n]*--enable_plan/);
 
   console.log("generate_enable_plan_test passed");
 }
