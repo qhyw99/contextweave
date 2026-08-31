@@ -133,12 +133,13 @@ function normalizeGenerationResult(result) {
   return result;
 }
 
-async function main() {
-  const args = parseArgs(process.argv.slice(2));
+async function main(argv = process.argv.slice(2), Client = CWClient) {
+  const args = parseArgs(argv);
   const userRequest = args["--user_request"] || args["-u"];
   const inputFile = args["--input_file"] || args["-i"];
   const sessionId = args["--session_id"] || args["-s"];
   const inputSequenceRaw = args["--input_sequence"];
+  const enablePlan = args["--enable_plan"] === "true";
   const diagramStyle = args["--diagram_style"] || args["-d"];
   const morphology = args["--morphology"] || args["-m"];
   const accentTargetsRaw = args["--accent_targets"];
@@ -207,7 +208,7 @@ async function main() {
     basePalette = validation.value;
   }
 
-  const client = new CWClient();
+  const client = new Client();
   const rawResult = await client.runGeneration({
     userRequest,
     inputFile,
@@ -218,6 +219,7 @@ async function main() {
     morphology,
     accentTargets,
     basePalette,
+    enablePlan,
     n,
     topK,
   });
@@ -311,7 +313,7 @@ async function main() {
   }
 }
 
-module.exports = { validateBasePalette, COLOR_NAME_MAP, STYLE_PRESET_ENUM };
+module.exports = { validateBasePalette, COLOR_NAME_MAP, STYLE_PRESET_ENUM, main };
 
 if (require.main === module) {
   main();

@@ -2,7 +2,7 @@
 name: interactive-architecture-diagram
 slug: contextweave-interactive-architecture
 displayName: 架构图一键生成
-version: 1.2.9
+version: 1.2.10
 summary: 将架构、流程和长文本转换为交互式结构图，并支持原生可编辑 PPTX 与 Visio 导出
 license: MIT
 description: 使用 ContextWeave 生成或修改架构图、流程图、思维导图和复杂信息图。适用于需要从代码、文件或自然语言中提取结构与关系并实际产出 CW、SVG、HTML、可编辑 PPTX 或原生 VSDX 的请求；未特别说明时，PPTX 与 Visio 使用原生形状和连接器导出。不适用于统计图表、手绘插画或像素级排版。
@@ -140,6 +140,21 @@ node scripts/generate_contextweave.cjs --input_file "<绝对路径>" --output_na
 | 用排版和留白承载文字 | 强调说明与论述 | `--morphology editorial` |
 
 两组参数彼此独立。例如：`topology + container` 适合分层架构，`logic + flow` 适合业务流程，`hybrid + container` 适合跨系统审批，`topology + editorial` 适合科研框架。
+
+#### 大纲规划模式：仅对明确的分层/网格容器布局启用
+
+`--enable_plan` 是外部显式 opt-in，不是复杂图的通用开关。只有同时满足以下条件时，才在生成命令中附加该参数：
+
+- 用户明确要求分层（layered）或网格（grid）式布局；
+- 构图范式选择 `--morphology container`，并且多个容器的层级或网格骨架是画面重点。
+
+普通容器分组、未明确指定分层/网格的请求均不传 `--enable_plan`。用户明确要求纵向、从上到下的步骤流时，保持普通生成；即使流程内容复杂，也使用 `logic + flow` 且不传 `--enable_plan`。
+
+符合条件时的命令示例：
+
+```bash
+node scripts/generate_contextweave.cjs --input_file "<绝对路径>" --diagram_style topology --morphology container --enable_plan --output_name "<语义化英文名>" --output_dir "docs/diagrams"
+```
 
 ### 3.3 最少澄清问题
 
