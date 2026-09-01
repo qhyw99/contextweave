@@ -137,6 +137,7 @@ async function main(argv = process.argv.slice(2), Client = CWClient) {
   const args = parseArgs(argv);
   const userRequest = args["--user_request"] || args["-u"];
   const inputFile = args["--input_file"] || args["-i"];
+  const outlineFile = args["--outline_file"];
   const sessionId = args["--session_id"] || args["-s"];
   const inputSequenceRaw = args["--input_sequence"];
   const enablePlan = args["--enable_plan"] === "true";
@@ -212,6 +213,7 @@ async function main(argv = process.argv.slice(2), Client = CWClient) {
   const rawResult = await client.runGeneration({
     userRequest,
     inputFile,
+    outlineFile,
     sessionId,
     inputSequence,
     validateRequestLength: true,

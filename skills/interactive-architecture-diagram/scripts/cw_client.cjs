@@ -8,6 +8,192 @@ const tls = require("tls");
 const net = require("net");
 
 const PROXY_CONNECT_TIMEOUT_MS = 30000;
+const OUTLINE_INTENT_VERSION = 1;
+const MAX_OUTLINE_FILE_BYTES = 256 * 1024;
+const SAFE_OUTLINE_ID_RE = /^[A-Za-z_][A-Za-z0-9_-]*$/;
+
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function assertExactKeys(value, allowed, location) {
+  if (!isPlainObject(value)) {
+    throw new Error(`${location} must be an object`);
+  }
+  const unknown = Object.keys(value).filter((key) => !allowed.includes(key));
+  if (unknown.length > 0) {
+    throw new Error(`${location} contains unknown field(s): ${unknown.join(", ")}`);
+  }
+}
+
+function requireKeys(value, required, location) {
+  const missing = required.filter((key) => !Object.prototype.hasOwnProperty.call(value, key));
+  if (missing.length > 0) {
+    throw new Error(`${location} is missing required field(s): ${missing.join(", ")}`);
+  }
+}
+
+function nonEmptyString(value, location) {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new Error(`${location} must be a non-empty string`);
+  }
+  return value.trim();
+}
+
+function parseGridSpan(value, location) {
+  if (typeof value !== "string" || !/^\[(?:[1-9]\d*)(?:\s*,\s*[1-9]\d*)*\]$/.test(value.trim())) {
+    throw new Error(`${location} must be a JSON-like list of positive integers`);
+  }
+  const values = value.trim().slice(1, -1).split(",").map((item) => Number(item.trim()));
+  if (values.some((item) => !Number.isSafeInteger(item))) {
+    throw new Error(`${location} indices must be safe integers`);
+  }
+  if (new Set(values).size !== values.length) {
+    throw new Error(`${location} must not contain duplicate indices`);
+  }
+  if (values.some((item, index) => index > 0 && item <= values[index - 1])) {
+    throw new Error(`${location} indices must be in ascending order`);
+  }
+  return values;
+}
+
+function normalizedEvidence(value) {
+  return String(value || "").replace(/\s+/g, "").toLowerCase();
+}
+
+function validateOutlineIntent(outline, userRequest) {
+  assertExactKeys(
+    outline,
+    ["outline_intent_version", "focus", "layout_policy", "edge_policy", "content", "global_relationships"],
+    "outline_intent"
+  );
+  requireKeys(outline, ["outline_intent_version", "focus", "layout_policy", "edge_policy", "content"], "outline_intent");
+
+  if (outline.outline_intent_version !== OUTLINE_INTENT_VERSION) {
+    throw new Error(`unsupported outline_intent_version ${JSON.stringify(outline.outline_intent_version)}; supported version is ${OUTLINE_INTENT_VERSION}`);
+  }
+  nonEmptyString(outline.focus, "outline_intent.focus");
+
+  assertExactKeys(outline.layout_policy, ["preset", "grid_mode"], "layout_policy");
+  requireKeys(outline.layout_policy, ["preset", "grid_mode"], "layout_policy");
+  if (!["layered", "three_lane", "stage_grid", "auto"].includes(outline.layout_policy.preset)) {
+    throw new Error("layout_policy.preset must be layered, three_lane, stage_grid, or auto");
+  }
+  if (!["guided", "locked"].includes(outline.layout_policy.grid_mode)) {
+    throw new Error("layout_policy.grid_mode must be guided or locked");
+  }
+
+  assertExactKeys(outline.edge_policy, ["mode", "focus", "preferred_range", "inferred_scope"], "edge_policy");
+  requireKeys(outline.edge_policy, ["mode"], "edge_policy");
+  if (!["sparse_semantic", "ordered_flow", "explicit_only"].includes(outline.edge_policy.mode)) {
+    throw new Error("edge_policy.mode must be sparse_semantic, ordered_flow, or explicit_only");
+  }
+  if (outline.edge_policy.focus !== undefined) {
+    if (!Array.isArray(outline.edge_policy.focus) || outline.edge_policy.focus.some((item) => typeof item !== "string" || !item.trim())) {
+      throw new Error("edge_policy.focus must be an array of non-empty strings");
+    }
+  }
+  if (outline.edge_policy.preferred_range !== undefined) {
+    const range = outline.edge_policy.preferred_range;
+    if (!Array.isArray(range) || range.length !== 2 || range.some((item) => !Number.isSafeInteger(item)) || range[0] < 0 || range[1] < range[0]) {
+      throw new Error("edge_policy.preferred_range must be [low, high] with 0 <= low <= high");
+    }
+  }
+  if (outline.edge_policy.inferred_scope !== undefined && outline.edge_policy.inferred_scope !== "local_only") {
+    throw new Error("edge_policy.inferred_scope must be local_only");
+  }
+
+  if (!Array.isArray(outline.content) || outline.content.length === 0) {
+    throw new Error("content must contain at least one top-level partition");
+  }
+  const itemNames = new Set();
+  const parsedPartitions = outline.content.map((item, index) => {
+    const location = `content[${index}]`;
+    assertExactKeys(item, ["item_name", "label", "type", "grid-rows", "grid-columns", "content_generation_prompt", "style_marker"], location);
+    requireKeys(item, ["item_name", "label", "type", "grid-rows", "grid-columns"], location);
+    const itemName = nonEmptyString(item.item_name, `${location}.item_name`);
+    if (!SAFE_OUTLINE_ID_RE.test(itemName)) {
+      throw new Error(`${location}.item_name must be a safe ASCII identifier`);
+    }
+    if (itemNames.has(itemName)) {
+      throw new Error(`content item_name values must be unique: ${itemName}`);
+    }
+    itemNames.add(itemName);
+    nonEmptyString(item.label, `${location}.label`);
+    if (!["grid", "flow"].includes(item.type)) {
+      throw new Error(`${location}.type must be grid or flow`);
+    }
+    if (item.content_generation_prompt !== undefined && typeof item.content_generation_prompt !== "string") {
+      throw new Error(`${location}.content_generation_prompt must be a string`);
+    }
+    if (item.style_marker !== undefined && !["TOPOLOGY", "LOGIC", "HYBRID"].includes(item.style_marker)) {
+      throw new Error(`${location}.style_marker must be TOPOLOGY, LOGIC, or HYBRID`);
+    }
+    const rows = parseGridSpan(item["grid-rows"], `${location}.grid-rows`);
+    const columns = parseGridSpan(item["grid-columns"], `${location}.grid-columns`);
+    return { itemName, rows, columns };
+  });
+
+  for (let left = 0; left < parsedPartitions.length; left += 1) {
+    for (let right = left + 1; right < parsedPartitions.length; right += 1) {
+      const first = parsedPartitions[left];
+      const second = parsedPartitions[right];
+      const rowsOverlap = first.rows.some((row) => second.rows.includes(row));
+      const columnsOverlap = first.columns.some((column) => second.columns.includes(column));
+      if (rowsOverlap && columnsOverlap) {
+        throw new Error(`top-level grid partitions must not overlap: ${first.itemName} and ${second.itemName}`);
+      }
+    }
+  }
+
+  if (outline.layout_policy.preset === "three_lane") {
+    if (outline.content.length !== 3) {
+      throw new Error("three_lane requires exactly three top-level partitions");
+    }
+    const columns = parsedPartitions.map((item) => item.columns.join(",")).sort();
+    if (JSON.stringify(columns) !== JSON.stringify(["1", "2", "3"])) {
+      throw new Error("three_lane requires one partition in each of columns 1, 2, 3");
+    }
+    const rowSpans = new Set(parsedPartitions.map((item) => item.rows.join(",")));
+    if (rowSpans.size !== 1) {
+      throw new Error("three_lane partitions must share the same complete row span");
+    }
+  }
+
+  const relationships = outline.global_relationships === undefined ? [] : outline.global_relationships;
+  if (!Array.isArray(relationships)) {
+    throw new Error("global_relationships must be an array");
+  }
+  const sourceEvidence = normalizedEvidence(userRequest);
+  relationships.forEach((relationship, index) => {
+    const location = `global_relationships[${index}]`;
+    assertExactKeys(relationship, ["from", "to", "label", "evidence_quote", "kind"], location);
+    requireKeys(relationship, ["from", "to", "evidence_quote"], location);
+    const from = nonEmptyString(relationship.from, `${location}.from`);
+    const to = nonEmptyString(relationship.to, `${location}.to`);
+    if (!SAFE_OUTLINE_ID_RE.test(from) || !SAFE_OUTLINE_ID_RE.test(to)) {
+      throw new Error(`${location} endpoints must be safe ASCII identifiers`);
+    }
+    if (from === to) {
+      throw new Error(`${location} endpoints must be different`);
+    }
+    if (!itemNames.has(from) || !itemNames.has(to)) {
+      throw new Error(`${location} endpoints must name top-level content items`);
+    }
+    if (relationship.label !== undefined && typeof relationship.label !== "string") {
+      throw new Error(`${location}.label must be a string`);
+    }
+    if (relationship.kind !== undefined && (typeof relationship.kind !== "string" || !relationship.kind.trim())) {
+      throw new Error(`${location}.kind must be a non-empty string`);
+    }
+    const quote = nonEmptyString(relationship.evidence_quote, `${location}.evidence_quote`);
+    if (!sourceEvidence || !normalizedEvidence(quote) || !sourceEvidence.includes(normalizedEvidence(quote))) {
+      throw new Error(`${location}.evidence_quote must be an exact excerpt of user_request`);
+    }
+  });
+
+  return outline;
+}
 
 function normalizeHostname(hostname) {
   let normalized = String(hostname || "").trim().toLowerCase();
@@ -346,6 +532,61 @@ class CWClient {
     return null;
   }
 
+  readOutlineIntentFile(targetPath, userRequest) {
+    if (!targetPath || typeof targetPath !== "string") {
+      return { error: this.error("INVALID_OUTLINE_FILE", "outline_file path is empty or invalid") };
+    }
+    if (!path.isAbsolute(targetPath)) {
+      return { error: this.error("OUTLINE_FILE_NOT_ABSOLUTE", `outline_file must be absolute: ${targetPath}`) };
+    }
+
+    const requestedPath = path.resolve(targetPath);
+    if (!fs.existsSync(requestedPath)) {
+      return { error: this.error("OUTLINE_FILE_NOT_FOUND", `outline_file not found: ${targetPath}`) };
+    }
+
+    let workspaceRealPath;
+    let outlineRealPath;
+    let stats;
+    try {
+      workspaceRealPath = fs.realpathSync.native(process.cwd());
+      outlineRealPath = fs.realpathSync.native(requestedPath);
+      const relative = path.relative(workspaceRealPath, outlineRealPath);
+      if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+        return { error: this.error("OUTLINE_PATH_OUTSIDE_WORKSPACE", "outline_file must resolve within the current workspace") };
+      }
+      stats = fs.statSync(outlineRealPath);
+    } catch (error) {
+      return { error: this.error("OUTLINE_FILE_READ_ERROR", `failed to inspect outline_file: ${String(error.message || error)}`) };
+    }
+
+    if (!stats.isFile()) {
+      return { error: this.error("OUTLINE_FILE_NOT_REGULAR", "outline_file must be a regular file") };
+    }
+    if (stats.size > MAX_OUTLINE_FILE_BYTES) {
+      return { error: this.error("OUTLINE_FILE_TOO_LARGE", `outline_file exceeds ${MAX_OUTLINE_FILE_BYTES} bytes`) };
+    }
+
+    let parsed;
+    try {
+      parsed = JSON.parse(fs.readFileSync(outlineRealPath, "utf8"));
+    } catch (error) {
+      return { error: this.error("INVALID_OUTLINE_JSON", `outline_file must contain valid JSON: ${String(error.message || error)}`) };
+    }
+    try {
+      return { value: validateOutlineIntent(parsed, userRequest) };
+    } catch (error) {
+      return {
+        error: this.error(
+          "INVALID_OUTLINE_INTENT",
+          String(error.message || error),
+          true,
+          "修正薄 OutlineIntent v1 后重试；不要把完整最终图或本地路径写入该文件"
+        ),
+      };
+    }
+  }
+
   error(code, message, recoverable = false, recoveryHint = null) {
     const result = { status: "error", error: { code, message } };
     if (recoverable) {
@@ -436,21 +677,34 @@ class CWClient {
         } catch (e) {}
         return this.error("RATE_LIMIT_EXCEEDED", errorMsg, true, "免费体验额度已用完或请求过于频繁。可稍后重试，或引导用户免费领取专属 API Key：询问用户邮箱 → 运行 request_quota_code.cjs --email <邮箱> 发送验证码 → 询问验证码 → 运行 redeem_quota_code.cjs --email <邮箱> --code <验证码> → 用户查收邮件按指引配置 CONTEXTWEAVE_MCP_API_KEY 后重试。");
       }
-      if (response.statusCode === 400 || response.statusCode === 409) {
-        let errorMsg = `${response.statusCode} ${response.statusMessage || "Request failed"}`;
-        try {
-          const parsed = JSON.parse(response.body);
-          const detail = parsed.detail || parsed.error;
-          if (detail) {
-            errorMsg += `: ${typeof detail === 'object' ? JSON.stringify(detail) : detail}`;
-          }
-        } catch (e) {}
-        return this.error(
-          response.statusCode === 400 ? "BAD_REQUEST" : "CONFLICT",
-          errorMsg,
-          true,
-          "请根据提示修正输入后重试"
+      if ([400, 409, 422].includes(response.statusCode)) {
+        const fallbackCodes = { 400: "BAD_REQUEST", 409: "CONFLICT", 422: "VALIDATION_ERROR" };
+        let parsed = {};
+        try { parsed = JSON.parse(response.body || "{}"); } catch (e) {}
+        const detail = parsed.detail !== undefined
+          ? parsed.detail
+          : (parsed.error !== undefined ? parsed.error : parsed);
+        const structured = isPlainObject(detail) ? detail : {};
+        const message = structured.message
+          || (typeof detail === "string" ? detail : "")
+          || (Array.isArray(detail) ? JSON.stringify(detail) : "")
+          || `${response.statusCode} ${response.statusMessage || "Request failed"}`;
+        const result = this.error(
+          structured.code || fallbackCodes[response.statusCode],
+          message,
+          structured.recoverable !== false,
+          structured.recovery_hint || "请根据提示修正输入后重试"
         );
+        result.error.http_status = response.statusCode;
+        for (const [key, value] of Object.entries(structured)) {
+          if (!["code", "message", "recoverable", "recovery_hint"].includes(key)) {
+            result.error[key] = value;
+          }
+        }
+        if (Array.isArray(detail)) {
+          result.error.detail = detail;
+        }
+        return result;
       }
       if (response.statusCode < 200 || response.statusCode >= 300) {
         let errorMsg = `${response.statusCode} ${response.statusMessage || "Request failed"}`;
@@ -489,7 +743,7 @@ class CWClient {
     };
   }
 
-  async runGeneration({ userRequest, inputFile = null, sessionId = null, inputSequence = null, validateRequestLength = false, diagramStyle = null, morphology = null, accentTargets = null, basePalette = null, enablePlan = false, n = 1, topK = 1 }) {
+  async runGeneration({ userRequest, inputFile = null, outlineFile = null, sessionId = null, inputSequence = null, validateRequestLength = false, diagramStyle = null, morphology = null, accentTargets = null, basePalette = null, enablePlan = false, n = 1, topK = 1 }) {
     const payload = {
       input_sequence: inputSequence,
       export_svg: true,
@@ -592,6 +846,15 @@ class CWClient {
           `请调整请求文本的详细程度，确保字数在 ${minLength}-${maxLength} 之间。`
         );
       }
+    }
+
+    if (outlineFile) {
+      const outlineResult = this.readOutlineIntentFile(outlineFile, payload.user_request);
+      if (outlineResult.error) {
+        return outlineResult.error;
+      }
+      payload.outline_intent = outlineResult.value;
+      payload.outline_intent_version = outlineResult.value.outline_intent_version;
     }
 
     const result = await this.request("/run", payload);
@@ -803,5 +1066,8 @@ module.exports = {
   _internals: {
     getProxyForUrl,
     hostnameMatchesNoProxy,
+    validateOutlineIntent,
+    OUTLINE_INTENT_VERSION,
+    MAX_OUTLINE_FILE_BYTES,
   },
 };

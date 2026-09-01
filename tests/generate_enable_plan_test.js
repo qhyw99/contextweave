@@ -63,14 +63,19 @@ async function mainTest() {
   }
 
   const skill = fs.readFileSync(path.join(skillRoot, "SKILL.md"), "utf8");
-  assert.match(skill, /^version: 1\.2\.11$/m);
-  assert.match(skill, /分层（layered）或网格（grid）容器骨架/);
-  assert.match(skill, /中央或单侧主链配固定的左右\/平行说明栏[\s\S]*logic \+ flow \+ --enable_plan/);
-  assert.match(skill, /紧凑、平衡或多行的阶段网格[\s\S]*logic \+ flow \+ --enable_plan/);
-  assert.match(skill, /普通单轴纵向\/横向流程不传 `--enable_plan`/);
-  assert.match(skill, /节点数、阶段数、文本长度或内容复杂度本身不得触发 `--enable_plan`/);
-  assert.match(skill, /generate_contextweave\.cjs[^\n]*--morphology container[^\n]*--enable_plan/);
-  assert.match(skill, /generate_contextweave\.cjs[^\n]*--morphology flow[^\n]*--enable_plan/);
+  assert.match(skill, /^version: 1\.2\.12$/m);
+  assert.match(skill, /明确选择 `layered`、`three_lane`、`stage_grid`/);
+  assert.match(skill, /中央主链配固定左右侧轨/);
+  assert.match(skill, /--outline_file/);
+  assert.match(skill, /普通容器分组、普通单轴流程/);
+  assert.match(skill, /节点多、文本长或内容复杂/);
+
+  const layoutPlanning = fs.readFileSync(
+    path.join(skillRoot, "references", "layout-planning.md"),
+    "utf8"
+  );
+  assert.match(layoutPlanning, /clients → gateway → application → service → infra/);
+  assert.match(layoutPlanning, /Nacos\/Redis[^\n]*不扩散成多条边/);
 
   console.log("generate_enable_plan_test passed");
 }

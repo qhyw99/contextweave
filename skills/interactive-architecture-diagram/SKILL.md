@@ -2,7 +2,7 @@
 name: interactive-architecture-diagram
 slug: contextweave-interactive-architecture
 displayName: 架构图一键生成
-version: 1.2.11
+version: 1.2.12
 summary: 将架构、流程和长文本转换为交互式结构图，并支持原生可编辑 PPTX 与 Visio 导出
 license: MIT
 description: 使用 ContextWeave 生成或修改架构图、流程图、思维导图和复杂信息图。适用于需要从代码、文件或自然语言中提取结构与关系并实际产出 CW、SVG、HTML、可编辑 PPTX 或原生 VSDX 的请求；未特别说明时，PPTX 与 Visio 使用原生形状和连接器导出。不适用于统计图表、手绘插画或像素级排版。
@@ -141,27 +141,15 @@ node scripts/generate_contextweave.cjs --input_file "<绝对路径>" --output_na
 
 两组参数彼此独立。例如：`topology + container` 适合分层架构，`logic + flow` 适合业务流程，`hybrid + container` 适合跨系统审批，`topology + editorial` 适合科研框架。
 
-#### 大纲规划模式：仅对用户明确锁定的多区域空间骨架启用
+#### 构图骨架：只在用户明确选择时附加薄 OutlineIntent
 
-`--enable_plan` 是外部显式 opt-in，不是复杂图的通用开关。仅在以下任一结构被用户明确要求时附加：
-
-- 分层（layered）或网格（grid）容器骨架是画面重点：使用 `topology + container + --enable_plan`；
-- 中央或单侧主链配固定的左右/平行说明栏：使用 `logic + flow + --enable_plan`，并在请求中声明说明卡默认不挂边；
-- 明确要求紧凑、平衡或多行的阶段网格，或明确允许横/纵两种顺序且包含多个命名阶段：使用 `logic + flow + --enable_plan`，按 row-major 阅读顺序排列。
-
-普通容器分组不启用。没有固定侧栏或多行网格的普通单轴纵向/横向流程不传 `--enable_plan`。节点数、阶段数、文本长度或内容复杂度本身不得触发 `--enable_plan`。
-
-符合条件时的命令示例：
+仅当用户明确选择 `layered`、`three_lane`、`stage_grid`，或明确要求中央主链配固定左右侧轨等空间骨架时，读取 [构图骨架规划](references/layout-planning.md)，生成一个短小的 OutlineIntent JSON 文件，并附加：
 
 ```bash
-node scripts/generate_contextweave.cjs --input_file "<绝对路径>" --diagram_style topology --morphology container --enable_plan --output_name "<语义化英文名>" --output_dir "docs/diagrams"
+--outline_file "<工作区内的绝对路径>"
 ```
 
-中央主链与固定说明栏示例：
-
-```bash
-node scripts/generate_contextweave.cjs --input_file "<绝对路径>" --diagram_style logic --morphology flow --enable_plan --output_name "<语义化英文名>" --output_dir "docs/diagrams"
-```
+普通容器分组、普通单轴流程，以及仅因节点多、文本长或内容复杂的请求都不生成、不传 `--outline_file`，沿用普通生成。`OutlineIntent` 只声明顶层空间骨架和有原文证据的必要跨区关系，不描述最终节点图，也不暴露后端插件。
 
 ### 3.3 最少澄清问题
 
@@ -225,6 +213,7 @@ node scripts/generate_contextweave.cjs --input_file "<绝对路径>" --diagram_s
 | 触发条件 | 必读文档 |
 |---|---|
 | 需要拆模块、拆层级或在同一架构上切换链路 | [多视图与 Scenarios](references/multi-view-scenarios.md) |
+| 用户明确选择分层、三栏、阶段网格或固定侧轨骨架 | [构图骨架规划](references/layout-planning.md) |
 | 修改已有图、导入/导出 CW、添加文件链接 | [高级操作](references/advanced-operations.md) |
 | 脚本超时、报错、等待专家处理、额度不足或提交反馈 | [异常恢复](references/error-recovery.md) |
 | 任何准备向 ContextWeave 服务发送数据的操作 | [外部数据传输与授权](references/external-data-consent.md) |
