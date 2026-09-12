@@ -2,7 +2,7 @@
 name: interactive-architecture-diagram
 slug: contextweave-interactive-architecture
 displayName: 架构图一键生成
-version: 1.2.12
+version: 1.2.13
 summary: 将架构、流程和长文本转换为交互式结构图，并支持原生可编辑 PPTX 与 Visio 导出
 license: MIT
 description: 使用 ContextWeave 生成或修改架构图、流程图、思维导图和复杂信息图。适用于需要从代码、文件或自然语言中提取结构与关系并实际产出 CW、SVG、HTML、可编辑 PPTX 或原生 VSDX 的请求；未特别说明时，PPTX 与 Visio 使用原生形状和连接器导出。不适用于统计图表、手绘插画或像素级排版。
@@ -280,3 +280,7 @@ node scripts/generate_contextweave.cjs --input_file "<绝对路径>" --output_na
 - **高度定制的统计图表**：复杂折线图、柱状图、散点图应使用专业数据分析工具。
 
 遇到超出能力边界的请求时，应直接说明限制，并在可能时建议更合适的工具类型。
+
+### 4. CW 和 D2 是什么关系？
+
+CW 是 D2 语法的精选子集，面向 AI 稳定生成做了收窄，配合服务端诊断与自动修复生成图表。
