@@ -89,47 +89,44 @@ function validateBasePalette(raw) {
   return { value: result };
 }
 
+const EXPERT_QUEUE_MESSAGE = "由于图表极为复杂，当前已进入后台专家队列进行深度处理。请告知用户图表正在处理中，并立即主动运行 `node scripts/recompile_contextweave.cjs --session_id <session_id>` 拉取结果（脚本内置自动轮询，默认最长等待约 20 分钟，生成完成即返回），不要让用户手动触发。";
+
+function missingSessionError(result) {
+  return {
+    status: "error",
+    error: {
+      code: "MISSING_SESSION_ID",
+      message: "生成成功响应缺少 session_id，无法用于后续编辑",
+      recoverable: true,
+      recovery_hint: "请重新执行生成；若仍失败请检查后端服务",
+    },
+    raw_result: result,
+  };
+}
+
 function normalizeGenerationResult(result) {
   if (result.status === "ok" && Array.isArray(result.choices)) {
     result.choices = result.choices.map(choice => {
-      let normalized = normalizeAssetResult(choice);
-      if (!normalized.svg_url) {
-        normalized.message = "由于图表极为复杂，当前已进入后台专家队列进行深度处理。请告知用户图表正在处理中，并立即主动运行 `node scripts/recompile_contextweave.cjs --session_id <session_id>` 拉取结果（脚本内置自动轮询），不要让用户手动触发。";
-        normalized.svg_url = "WAITING_FOR_EXPERT_PROCESSING";
+      const normalized = normalizeAssetResult(choice);
+      if (!normalized.pptx_url) {
+        normalized.message = EXPERT_QUEUE_MESSAGE;
+        normalized.pptx_url = "WAITING_FOR_EXPERT_PROCESSING";
       }
       return normalized;
     });
     if (!result.session_id) {
-      return {
-        status: "error",
-        error: {
-          code: "MISSING_SESSION_ID",
-          message: "生成成功响应缺少 session_id，无法用于后续编辑",
-          recoverable: true,
-          recovery_hint: "请重新执行生成；若仍失败请检查后端服务",
-        },
-        raw_result: result,
-      };
+      return missingSessionError(result);
     }
     return result;
   }
 
   result = normalizeAssetResult(result);
   if (result.status === "ok" && !result.session_id) {
-    return {
-      status: "error",
-      error: {
-        code: "MISSING_SESSION_ID",
-        message: "生成成功响应缺少 session_id，无法用于后续编辑",
-        recoverable: true,
-        recovery_hint: "请重新执行生成；若仍失败请检查后端服务",
-      },
-      raw_result: result,
-    };
+    return missingSessionError(result);
   }
-  if (result.status === "ok" && !result.svg_url) {
-    result.message = "由于图表极为复杂，当前已进入后台专家队列进行深度处理。请告知用户图表正在处理中，并立即主动运行 `node scripts/recompile_contextweave.cjs --session_id <session_id>` 拉取结果（脚本内置自动轮询，默认最长等待约 20 分钟，生成完成即返回），不要让用户手动触发。";
-    result.svg_url = "WAITING_FOR_EXPERT_PROCESSING";
+  if (result.status === "ok" && !result.pptx_url) {
+    result.message = EXPERT_QUEUE_MESSAGE;
+    result.pptx_url = "WAITING_FOR_EXPERT_PROCESSING";
   }
   return result;
 }
@@ -140,12 +137,11 @@ async function main(argv = process.argv.slice(2), Client = CWClient) {
   if (authoringError) { printJson(authoringError); process.exit(1); }
   const userRequest = args["--user_request"] || args["-u"];
   const inputFile = args["--input_file"] || args["-i"];
+  const enablePlan = args["--enable_plan"] === "true";
+  const outlineFile = args["--outline_file"];
   const authoringFile = args["--authoring_file"];
   const diagramType = args["--diagram_type"];
-  const outlineFile = args["--outline_file"];
   const sessionId = args["--session_id"] || args["-s"];
-  const inputSequenceRaw = args["--input_sequence"];
-  const enablePlan = args["--enable_plan"] === "true";
   const diagramStyle = args["--diagram_style"] || args["-d"];
   const morphology = args["--morphology"] || args["-m"];
   const accentTargetsRaw = args["--accent_targets"];
@@ -166,24 +162,6 @@ async function main(argv = process.argv.slice(2), Client = CWClient) {
       },
     });
     process.exit(1);
-  }
-
-  let inputSequence = null;
-  if (inputSequenceRaw) {
-    try {
-      inputSequence = JSON.parse(inputSequenceRaw);
-    } catch (error) {
-      printJson({
-        status: "error",
-        error: {
-          code: "INVALID_INPUT_SEQUENCE",
-          message: "input_sequence 必须是合法 JSON",
-          recoverable: true,
-          recovery_hint: "按 JSON 数组格式传参后重试",
-        },
-      });
-      process.exit(1);
-    }
   }
 
   let accentTargets = null;
@@ -218,100 +196,40 @@ async function main(argv = process.argv.slice(2), Client = CWClient) {
   const rawResult = await client.runGeneration({
     userRequest,
     inputFile,
+    enablePlan,
+    outlineFile,
     diagramType,
     authoringFile,
-    outlineFile,
     sessionId,
-    inputSequence,
     validateRequestLength: true,
     diagramStyle,
     morphology,
     accentTargets,
     basePalette,
-    enablePlan,
     n,
     topK,
   });
 
-  const result = normalizeGenerationResult(authoringFile ? validateAuthoringResult(rawResult, "svg") : rawResult);
-  await saveAuthoringArtifacts(client, result, { outputName, outputDir, saveSource: true });
+  const result = normalizeGenerationResult(authoringFile ? validateAuthoringResult(rawResult, "pptx") : rawResult);
+  await saveAuthoringArtifacts(client, result, { outputName, outputDir, saveSource: false });
 
+  // 简化版：不落盘 CW 代码，仅下载 PPTX 产物
   if (result.status === "ok" && Array.isArray(result.choices)) {
-    const fs = require("fs");
-    const path = require("path");
-
-
     for (let i = 0; i < result.choices.length; i++) {
       const choice = result.choices[i];
       const suffix = `_choice_${i + 1}`;
-
-      if (choice.cw_code) {
-        const baseName = outputName || result.session_id || "diagram";
-        const filename = `${baseName}${suffix}.cw`;
-        let targetDir = process.cwd();
-        if (outputDir) {
-          targetDir = path.resolve(outputDir);
-          if (!fs.existsSync(targetDir)) {
-            fs.mkdirSync(targetDir, { recursive: true });
-          }
-        }
-        const filePath = path.join(targetDir, filename);
-
-        let finalCode = choice.cw_code;
-        // Optionally inject choice-specific session id if backend provides it, otherwise use root session_id
-        const choiceSessionId = choice.session_id || result.session_id;
-        if (choiceSessionId) {
-          finalCode = `# session_id: ${choiceSessionId}\n` + finalCode;
-        }
-        fs.writeFileSync(filePath, finalCode, "utf8");
-
-        delete choice.cw_code;
-        choice.saved_cw_file = filePath;
-      }
-
-      // Download assets for this choice
       const tempObj = {
         status: "ok",
         session_id: choice.session_id || result.session_id,
         output_name: outputName ? `${outputName}${suffix}` : `${result.session_id || "diagram"}${suffix}`,
         output_dir: outputDir,
-        raw_svg_url: choice.raw_svg_url,
-        svg_url: choice.svg_url,
         pptx_url: choice.pptx_url,
       };
       await downloadAssetsLocally(tempObj);
-
-      if (tempObj.saved_svg_file) choice.saved_svg_file = tempObj.saved_svg_file;
       if (tempObj.saved_pptx_file) choice.saved_pptx_file = tempObj.saved_pptx_file;
       if (tempObj.message) choice.message = tempObj.message;
     }
-  } else if (result.status === "ok" && result.cw_code) {
-    const fs = require("fs");
-    const path = require("path");
-
-    const filename = outputName ? `${outputName}.cw` : (result.session_id ? `${result.session_id}.cw` : "diagram.cw");
-    let targetDir = process.cwd();
-    if (outputDir) {
-      targetDir = path.resolve(outputDir);
-      if (!fs.existsSync(targetDir)) {
-        fs.mkdirSync(targetDir, { recursive: true });
-      }
-    }
-    const filePath = path.join(targetDir, filename);
-
-    let finalCode = result.cw_code;
-    if (result.session_id) {
-      finalCode = `# session_id: ${result.session_id}\n` + finalCode;
-    }
-    fs.writeFileSync(filePath, finalCode, "utf8");
-
-    // Remove cw_code from the output to prevent polluting LLM context window
-    delete result.cw_code;
-    result.saved_cw_file = filePath;
-  }
-
-
-  if (!Array.isArray(result.choices)) {
+  } else if (result.status === "ok") {
     result.output_name = outputName;
     result.output_dir = outputDir;
     await downloadAssetsLocally(result);

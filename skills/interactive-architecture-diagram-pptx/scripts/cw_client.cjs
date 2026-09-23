@@ -9,192 +9,6 @@ const tls = require("tls");
 const net = require("net");
 
 const PROXY_CONNECT_TIMEOUT_MS = 30000;
-const OUTLINE_INTENT_VERSION = 1;
-const MAX_OUTLINE_FILE_BYTES = 256 * 1024;
-const SAFE_OUTLINE_ID_RE = /^[A-Za-z_][A-Za-z0-9_-]*$/;
-
-function isPlainObject(value) {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function assertExactKeys(value, allowed, location) {
-  if (!isPlainObject(value)) {
-    throw new Error(`${location} must be an object`);
-  }
-  const unknown = Object.keys(value).filter((key) => !allowed.includes(key));
-  if (unknown.length > 0) {
-    throw new Error(`${location} contains unknown field(s): ${unknown.join(", ")}`);
-  }
-}
-
-function requireKeys(value, required, location) {
-  const missing = required.filter((key) => !Object.prototype.hasOwnProperty.call(value, key));
-  if (missing.length > 0) {
-    throw new Error(`${location} is missing required field(s): ${missing.join(", ")}`);
-  }
-}
-
-function nonEmptyString(value, location) {
-  if (typeof value !== "string" || !value.trim()) {
-    throw new Error(`${location} must be a non-empty string`);
-  }
-  return value.trim();
-}
-
-function parseGridSpan(value, location) {
-  if (typeof value !== "string" || !/^\[(?:[1-9]\d*)(?:\s*,\s*[1-9]\d*)*\]$/.test(value.trim())) {
-    throw new Error(`${location} must be a JSON-like list of positive integers`);
-  }
-  const values = value.trim().slice(1, -1).split(",").map((item) => Number(item.trim()));
-  if (values.some((item) => !Number.isSafeInteger(item))) {
-    throw new Error(`${location} indices must be safe integers`);
-  }
-  if (new Set(values).size !== values.length) {
-    throw new Error(`${location} must not contain duplicate indices`);
-  }
-  if (values.some((item, index) => index > 0 && item <= values[index - 1])) {
-    throw new Error(`${location} indices must be in ascending order`);
-  }
-  return values;
-}
-
-function normalizedEvidence(value) {
-  return String(value || "").replace(/\s+/g, "").toLowerCase();
-}
-
-function validateOutlineIntent(outline, userRequest) {
-  assertExactKeys(
-    outline,
-    ["outline_intent_version", "focus", "layout_policy", "edge_policy", "content", "global_relationships"],
-    "outline_intent"
-  );
-  requireKeys(outline, ["outline_intent_version", "focus", "layout_policy", "edge_policy", "content"], "outline_intent");
-
-  if (outline.outline_intent_version !== OUTLINE_INTENT_VERSION) {
-    throw new Error(`unsupported outline_intent_version ${JSON.stringify(outline.outline_intent_version)}; supported version is ${OUTLINE_INTENT_VERSION}`);
-  }
-  nonEmptyString(outline.focus, "outline_intent.focus");
-
-  assertExactKeys(outline.layout_policy, ["preset", "grid_mode"], "layout_policy");
-  requireKeys(outline.layout_policy, ["preset", "grid_mode"], "layout_policy");
-  if (!["layered", "three_lane", "stage_grid", "auto"].includes(outline.layout_policy.preset)) {
-    throw new Error("layout_policy.preset must be layered, three_lane, stage_grid, or auto");
-  }
-  if (!["guided", "locked"].includes(outline.layout_policy.grid_mode)) {
-    throw new Error("layout_policy.grid_mode must be guided or locked");
-  }
-
-  assertExactKeys(outline.edge_policy, ["mode", "focus", "preferred_range", "inferred_scope"], "edge_policy");
-  requireKeys(outline.edge_policy, ["mode"], "edge_policy");
-  if (!["sparse_semantic", "ordered_flow", "explicit_only"].includes(outline.edge_policy.mode)) {
-    throw new Error("edge_policy.mode must be sparse_semantic, ordered_flow, or explicit_only");
-  }
-  if (outline.edge_policy.focus !== undefined) {
-    if (!Array.isArray(outline.edge_policy.focus) || outline.edge_policy.focus.some((item) => typeof item !== "string" || !item.trim())) {
-      throw new Error("edge_policy.focus must be an array of non-empty strings");
-    }
-  }
-  if (outline.edge_policy.preferred_range !== undefined) {
-    const range = outline.edge_policy.preferred_range;
-    if (!Array.isArray(range) || range.length !== 2 || range.some((item) => !Number.isSafeInteger(item)) || range[0] < 0 || range[1] < range[0]) {
-      throw new Error("edge_policy.preferred_range must be [low, high] with 0 <= low <= high");
-    }
-  }
-  if (outline.edge_policy.inferred_scope !== undefined && outline.edge_policy.inferred_scope !== "local_only") {
-    throw new Error("edge_policy.inferred_scope must be local_only");
-  }
-
-  if (!Array.isArray(outline.content) || outline.content.length === 0) {
-    throw new Error("content must contain at least one top-level partition");
-  }
-  const itemNames = new Set();
-  const parsedPartitions = outline.content.map((item, index) => {
-    const location = `content[${index}]`;
-    assertExactKeys(item, ["item_name", "label", "type", "grid-rows", "grid-columns", "content_generation_prompt", "style_marker"], location);
-    requireKeys(item, ["item_name", "label", "type", "grid-rows", "grid-columns"], location);
-    const itemName = nonEmptyString(item.item_name, `${location}.item_name`);
-    if (!SAFE_OUTLINE_ID_RE.test(itemName)) {
-      throw new Error(`${location}.item_name must be a safe ASCII identifier`);
-    }
-    if (itemNames.has(itemName)) {
-      throw new Error(`content item_name values must be unique: ${itemName}`);
-    }
-    itemNames.add(itemName);
-    nonEmptyString(item.label, `${location}.label`);
-    if (!["grid", "flow"].includes(item.type)) {
-      throw new Error(`${location}.type must be grid or flow`);
-    }
-    if (item.content_generation_prompt !== undefined && typeof item.content_generation_prompt !== "string") {
-      throw new Error(`${location}.content_generation_prompt must be a string`);
-    }
-    if (item.style_marker !== undefined && !["TOPOLOGY", "LOGIC", "HYBRID"].includes(item.style_marker)) {
-      throw new Error(`${location}.style_marker must be TOPOLOGY, LOGIC, or HYBRID`);
-    }
-    const rows = parseGridSpan(item["grid-rows"], `${location}.grid-rows`);
-    const columns = parseGridSpan(item["grid-columns"], `${location}.grid-columns`);
-    return { itemName, rows, columns };
-  });
-
-  for (let left = 0; left < parsedPartitions.length; left += 1) {
-    for (let right = left + 1; right < parsedPartitions.length; right += 1) {
-      const first = parsedPartitions[left];
-      const second = parsedPartitions[right];
-      const rowsOverlap = first.rows.some((row) => second.rows.includes(row));
-      const columnsOverlap = first.columns.some((column) => second.columns.includes(column));
-      if (rowsOverlap && columnsOverlap) {
-        throw new Error(`top-level grid partitions must not overlap: ${first.itemName} and ${second.itemName}`);
-      }
-    }
-  }
-
-  if (outline.layout_policy.preset === "three_lane") {
-    if (outline.content.length !== 3) {
-      throw new Error("three_lane requires exactly three top-level partitions");
-    }
-    const columns = parsedPartitions.map((item) => item.columns.join(",")).sort();
-    if (JSON.stringify(columns) !== JSON.stringify(["1", "2", "3"])) {
-      throw new Error("three_lane requires one partition in each of columns 1, 2, 3");
-    }
-    const rowSpans = new Set(parsedPartitions.map((item) => item.rows.join(",")));
-    if (rowSpans.size !== 1) {
-      throw new Error("three_lane partitions must share the same complete row span");
-    }
-  }
-
-  const relationships = outline.global_relationships === undefined ? [] : outline.global_relationships;
-  if (!Array.isArray(relationships)) {
-    throw new Error("global_relationships must be an array");
-  }
-  const sourceEvidence = normalizedEvidence(userRequest);
-  relationships.forEach((relationship, index) => {
-    const location = `global_relationships[${index}]`;
-    assertExactKeys(relationship, ["from", "to", "label", "evidence_quote", "kind"], location);
-    requireKeys(relationship, ["from", "to", "evidence_quote"], location);
-    const from = nonEmptyString(relationship.from, `${location}.from`);
-    const to = nonEmptyString(relationship.to, `${location}.to`);
-    if (!SAFE_OUTLINE_ID_RE.test(from) || !SAFE_OUTLINE_ID_RE.test(to)) {
-      throw new Error(`${location} endpoints must be safe ASCII identifiers`);
-    }
-    if (from === to) {
-      throw new Error(`${location} endpoints must be different`);
-    }
-    if (!itemNames.has(from) || !itemNames.has(to)) {
-      throw new Error(`${location} endpoints must name top-level content items`);
-    }
-    if (relationship.label !== undefined && typeof relationship.label !== "string") {
-      throw new Error(`${location}.label must be a string`);
-    }
-    if (relationship.kind !== undefined && (typeof relationship.kind !== "string" || !relationship.kind.trim())) {
-      throw new Error(`${location}.kind must be a non-empty string`);
-    }
-    const quote = nonEmptyString(relationship.evidence_quote, `${location}.evidence_quote`);
-    if (!sourceEvidence || !normalizedEvidence(quote) || !sourceEvidence.includes(normalizedEvidence(quote))) {
-      throw new Error(`${location}.evidence_quote must be an exact excerpt of user_request`);
-    }
-  });
-
-  return outline;
-}
 
 function normalizeHostname(hostname) {
   let normalized = String(hostname || "").trim().toLowerCase();
@@ -533,61 +347,6 @@ class CWClient {
     return null;
   }
 
-  readOutlineIntentFile(targetPath, userRequest) {
-    if (!targetPath || typeof targetPath !== "string") {
-      return { error: this.error("INVALID_OUTLINE_FILE", "outline_file path is empty or invalid") };
-    }
-    if (!path.isAbsolute(targetPath)) {
-      return { error: this.error("OUTLINE_FILE_NOT_ABSOLUTE", `outline_file must be absolute: ${targetPath}`) };
-    }
-
-    const requestedPath = path.resolve(targetPath);
-    if (!fs.existsSync(requestedPath)) {
-      return { error: this.error("OUTLINE_FILE_NOT_FOUND", `outline_file not found: ${targetPath}`) };
-    }
-
-    let workspaceRealPath;
-    let outlineRealPath;
-    let stats;
-    try {
-      workspaceRealPath = fs.realpathSync.native(process.cwd());
-      outlineRealPath = fs.realpathSync.native(requestedPath);
-      const relative = path.relative(workspaceRealPath, outlineRealPath);
-      if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
-        return { error: this.error("OUTLINE_PATH_OUTSIDE_WORKSPACE", "outline_file must resolve within the current workspace") };
-      }
-      stats = fs.statSync(outlineRealPath);
-    } catch (error) {
-      return { error: this.error("OUTLINE_FILE_READ_ERROR", `failed to inspect outline_file: ${String(error.message || error)}`) };
-    }
-
-    if (!stats.isFile()) {
-      return { error: this.error("OUTLINE_FILE_NOT_REGULAR", "outline_file must be a regular file") };
-    }
-    if (stats.size > MAX_OUTLINE_FILE_BYTES) {
-      return { error: this.error("OUTLINE_FILE_TOO_LARGE", `outline_file exceeds ${MAX_OUTLINE_FILE_BYTES} bytes`) };
-    }
-
-    let parsed;
-    try {
-      parsed = JSON.parse(fs.readFileSync(outlineRealPath, "utf8"));
-    } catch (error) {
-      return { error: this.error("INVALID_OUTLINE_JSON", `outline_file must contain valid JSON: ${String(error.message || error)}`) };
-    }
-    try {
-      return { value: validateOutlineIntent(parsed, userRequest) };
-    } catch (error) {
-      return {
-        error: this.error(
-          "INVALID_OUTLINE_INTENT",
-          String(error.message || error),
-          true,
-          "修正薄 OutlineIntent v1 后重试；不要把完整最终图或本地路径写入该文件"
-        ),
-      };
-    }
-  }
-
   error(code, message, recoverable = false, recoveryHint = null) {
     const result = { status: "error", error: { code, message } };
     if (recoverable) {
@@ -620,7 +379,7 @@ class CWClient {
             await sleep(waitMs);
             continue;
           }
-          return this.error("API_ERROR", `${response.statusCode} ${response.statusMessage || "Server Error"}（已自动重试 ${this.maxRequestRetries} 次）`, true, "后端服务暂时不可用，请稍后重试；若持续失败请走 submit_feedback 兜底");
+          return this.error("API_ERROR", `${response.statusCode} ${response.statusMessage || "Server Error"}（已自动重试 ${this.maxRequestRetries} 次）`, true, "后端服务暂时不可用，请稍后重试");
         }
         return this.handleResponse(response);
       } catch (error) {
@@ -642,7 +401,7 @@ class CWClient {
   handleResponse(response) {
     try {
       if (response.statusCode === 402) {
-        return this.error("PAYMENT_REQUIRED", "Insufficient credits", true, "额度不足。可引导用户免费领取：询问用户邮箱 → 运行 request_quota_code.cjs --email <邮箱> 发送验证码 → 询问验证码 → 运行 redeem_quota_code.cjs --email <邮箱> --code <验证码> → 用户查收邮件按指引配置 CONTEXTWEAVE_MCP_API_KEY 后重试。");
+        return this.error("PAYMENT_REQUIRED", "Insufficient credits", true, "额度不足，请稍后重试或配置专属 CONTEXTWEAVE_MCP_API_KEY 后重试。");
       }
       if (response.statusCode === 403) {
         return this.error("AUTH_ERROR", "Invalid API key or missing key", true, "请检查 CONTEXTWEAVE_MCP_API_KEY");
@@ -676,36 +435,23 @@ class CWClient {
           const parsed = JSON.parse(response.body);
           errorMsg = parsed.detail || parsed.error || errorMsg;
         } catch (e) {}
-        return this.error("RATE_LIMIT_EXCEEDED", errorMsg, true, "免费体验额度已用完或请求过于频繁。可稍后重试，或引导用户免费领取专属 API Key：询问用户邮箱 → 运行 request_quota_code.cjs --email <邮箱> 发送验证码 → 询问验证码 → 运行 redeem_quota_code.cjs --email <邮箱> --code <验证码> → 用户查收邮件按指引配置 CONTEXTWEAVE_MCP_API_KEY 后重试。");
+        return this.error("RATE_LIMIT_EXCEEDED", errorMsg, true, "免费体验额度已用完或请求过于频繁，请稍后重试或配置专属 CONTEXTWEAVE_MCP_API_KEY。");
       }
-      if ([400, 409, 422].includes(response.statusCode)) {
-        const fallbackCodes = { 400: "BAD_REQUEST", 409: "CONFLICT", 422: "VALIDATION_ERROR" };
-        let parsed = {};
-        try { parsed = JSON.parse(response.body || "{}"); } catch (e) {}
-        const detail = parsed.detail !== undefined
-          ? parsed.detail
-          : (parsed.error !== undefined ? parsed.error : parsed);
-        const structured = isPlainObject(detail) ? detail : {};
-        const message = structured.message
-          || (typeof detail === "string" ? detail : "")
-          || (Array.isArray(detail) ? JSON.stringify(detail) : "")
-          || `${response.statusCode} ${response.statusMessage || "Request failed"}`;
-        const result = this.error(
-          structured.code || fallbackCodes[response.statusCode],
-          message,
-          structured.recoverable !== false,
-          structured.recovery_hint || "请根据提示修正输入后重试"
-        );
-        result.error.http_status = response.statusCode;
-        for (const [key, value] of Object.entries(structured)) {
-          if (!["code", "message", "recoverable", "recovery_hint"].includes(key)) {
-            result.error[key] = value;
+      if (response.statusCode === 400 || response.statusCode === 409) {
+        let errorMsg = `${response.statusCode} ${response.statusMessage || "Request failed"}`;
+        try {
+          const parsed = JSON.parse(response.body);
+          const detail = parsed.detail || parsed.error;
+          if (detail) {
+            errorMsg += `: ${typeof detail === 'object' ? JSON.stringify(detail) : detail}`;
           }
-        }
-        if (Array.isArray(detail)) {
-          result.error.detail = detail;
-        }
-        return result;
+        } catch (e) {}
+        return this.error(
+          response.statusCode === 400 ? "BAD_REQUEST" : "CONFLICT",
+          errorMsg,
+          true,
+          "请根据提示修正输入后重试"
+        );
       }
       if (response.statusCode < 200 || response.statusCode >= 300) {
         let errorMsg = `${response.statusCode} ${response.statusMessage || "Request failed"}`;
@@ -755,11 +501,11 @@ class CWClient {
     }
   }
 
-  async runGeneration({ userRequest, diagramType = null, authoringFile = null, inputFile = null, outlineFile = null, sessionId = null, inputSequence = null, validateRequestLength = false, diagramStyle = null, morphology = null, accentTargets = null, basePalette = null, enablePlan = false, n = 1, topK = 1 }) {
+  async runGeneration({ userRequest, enablePlan = false, inputSequence = null, diagramType = null, outlineFile = null, authoringFile = null, inputFile = null, sessionId = null, validateRequestLength = false, diagramStyle = null, morphology = null, accentTargets = null, basePalette = null, n = 1, topK = 1 }) {
     const payload = {
-      input_sequence: inputSequence,
-      export_svg: true,
-      export_pptx: false,
+      // 简化版：仅导出原生 PPTX，不导出 SVG/HTML
+      export_svg: false,
+      export_pptx: true,
       session_id: sessionId,
       test_file: null,
       n: n,
@@ -789,12 +535,10 @@ class CWClient {
       payload.base_palette = basePalette;
     }
 
-    // Add use_unified_bot flag if explicitly set via environment variable
     if (process.env.CONTEXTWEAVE_USE_UNIFIED_BOT === "true") {
       payload.use_unified_bot = true;
     }
-    // Add enable_plan flag if explicitly set via environment variable or passed as argument
-    if (enablePlan || process.env.CONTEXTWEAVE_ENABLE_PLAN === "true") {
+    if (process.env.CONTEXTWEAVE_ENABLE_PLAN === "true") {
       payload.enable_plan = true;
     }
     if (inputFile) {
@@ -833,23 +577,6 @@ class CWClient {
         }
         payload.user_request = reqText;
         payload.initial_cw_code = cwText;
-
-        // Try to parse user_request as JSON to extract base_path if present
-        try {
-          let jsonText = reqText;
-          // Extract JSON block if enclosed in markdown
-          const jsonMatch = reqText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-          if (jsonMatch) {
-            jsonText = jsonMatch[1];
-          }
-          const parsedReq = JSON.parse(jsonText);
-          if (parsedReq && parsedReq.base_path) {
-            payload.base_path = parsedReq.base_path;
-          }
-        } catch (e) {
-          // Not a valid JSON or no base_path, which is fine for normal text requests
-        }
-
       } catch (error) {
         return this.error("READ_ERROR", `Failed to read input file: ${String(error.message || error)}`);
       }
@@ -871,15 +598,6 @@ class CWClient {
       }
     }
 
-    if (outlineFile) {
-      const outlineResult = this.readOutlineIntentFile(outlineFile, payload.user_request);
-      if (outlineResult.error) {
-        return outlineResult.error;
-      }
-      payload.outline_intent = outlineResult.value;
-      payload.outline_intent_version = outlineResult.value.outline_intent_version;
-    }
-
     const result = await this.request("/run", payload);
     // 打印服务端透传的 lint 软警告（仅提示，不影响成功判定与返回值）
     if (result && Array.isArray(result.warnings) && result.warnings.length > 0) {
@@ -890,43 +608,9 @@ class CWClient {
     return result;
   }
 
-  async exportSessionAsset(sessionId, formatName) {
-    return this.request("/export-session", { session_id: sessionId, format: formatName });
-  }
-
   async recompileSession(sessionId) {
     return this.request("/session/recompile", { session_id: sessionId });
-  }
-
-  async importCode(target = "ContextWeave") {
-    const pathError = this.validateSafePath(target);
-    if (pathError) {
-      return pathError;
-    }
-    const targetPath = path.resolve(target);
-    if (!fs.existsSync(targetPath)) {
-      return this.error("PATH_NOT_FOUND", `Path not found: ${targetPath}`);
-    }
-
-    let cwFile = targetPath;
-    const stats = fs.statSync(targetPath);
-    if (stats.isDirectory()) {
-      cwFile = path.join(targetPath, "diagram.cw");
-      if (!fs.existsSync(cwFile)) {
-        return this.error("FILE_NOT_FOUND", `diagram.cw not found in directory: ${targetPath}`);
-      }
-    }
-
-    let content;
-    try {
-      content = fs.readFileSync(cwFile, "utf8");
-    } catch (error) {
-      return this.error("READ_ERROR", String(error.message || error));
-    }
-    return this.request("/session/import", { cw_code: content, source_name: cwFile });
-  }
-
-  async exportCode(sessionId, target = "ContextWeave", format = "cw") {
+  }  async exportCode(sessionId, target = "ContextWeave", format = "cw") {
     if (!["cw", "authoring"].includes(format)) return this.error("INVALID_EXPORT_FORMAT", "format 必须为 cw 或 authoring");
     const pathError = this.validateSafePath(target);
     if (pathError) return pathError;
@@ -958,15 +642,14 @@ function normalizeAssetResult(result) {
     return result;
   }
 
-  // We don't need to do anything complex anymore, because the backend (mcp_server)
-  // now sets the "svg_url" to the primary HTML wrapper link if HTML is enabled.
-  // It also returns "raw_svg_url" if we ever need the actual SVG link.
-
-  // Clean up excessive fields to keep the output clean
+  // 简化版只关心 PPTX 产物；清理 SVG/HTML 等无关字段，保持输出干净
+  delete result.svg_url;
+  delete result.raw_svg_url;
   delete result.html_url;
   delete result.primary_asset_url;
   delete result.preferred_asset_url;
   delete result.url;
+  delete result.cw_code;
 
   return result;
 }
@@ -1027,24 +710,7 @@ async function downloadAssetsLocally(result) {
     }
   }
 
-  // Handle svg_url or raw_svg_url
-  const svgUrl = result.raw_svg_url || result.svg_url;
-  if (svgUrl && svgUrl !== "WAITING_FOR_EXPERT_PROCESSING") {
-    // If it's HTML wrapper, the download might get HTML. It's better to fetch raw_svg_url if available, or just download what's there.
-    const ext = svgUrl.includes(".html") ? ".html" : ".svg";
-    const dest = path.join(targetDir, `${outputName}${ext}`);
-    try {
-      await downloadFile(svgUrl, dest);
-      result.saved_svg_file = dest;
-      result.message = (result.message ? result.message + "\n" : "") + `资源已自动下载到本地：${dest}`;
-    } catch (err) {
-      if (!Array.isArray(result.warnings)) result.warnings = [];
-      result.warnings.push(`SVG/HTML 资源下载失败：${err && err.isProxyError ? safeProxyErrorMessage(err) : String(err.message || err)}`);
-    }
-  }
-
-  // Handle generation responses (pptx_url) and explicit session exports
-  // whose primary URL is returned as download_url.
+  // 简化版：仅下载 PPTX 产物
   const pptxFormats = ["pptx", "pptx-svg", "pptx-native"];
   const pptxUrl = result.pptx_url || (pptxFormats.includes(result.format) ? result.download_url : null);
   if (pptxUrl) {
@@ -1059,22 +725,6 @@ async function downloadAssetsLocally(result) {
     }
   }
 
-  // Handle native Visio session exports. The backend returns the primary
-  // asset through download_url, matching the explicit PPTX export contract.
-  const vsdxFormats = ["vsdx", "vsdx-native"];
-  const vsdxUrl = result.vsdx_url || (vsdxFormats.includes(result.format) ? result.download_url : null);
-  if (vsdxUrl) {
-    const dest = path.join(targetDir, `${outputName}.vsdx`);
-    try {
-      await downloadFile(vsdxUrl, dest);
-      result.saved_vsdx_file = dest;
-      result.message = (result.message ? result.message + "\n" : "") + `VSDX 资源已自动下载到本地：${dest}`;
-    } catch (err) {
-      if (!Array.isArray(result.warnings)) result.warnings = [];
-      result.warnings.push(`VSDX 资源下载失败：${err && err.isProxyError ? safeProxyErrorMessage(err) : String(err.message || err)}`);
-    }
-  }
-
   return result;
 }
 
@@ -1086,8 +736,5 @@ module.exports = {
   _internals: {
     getProxyForUrl,
     hostnameMatchesNoProxy,
-    validateOutlineIntent,
-    OUTLINE_INTENT_VERSION,
-    MAX_OUTLINE_FILE_BYTES,
   },
 };

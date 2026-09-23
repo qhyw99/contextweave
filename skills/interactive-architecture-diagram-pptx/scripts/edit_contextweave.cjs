@@ -36,9 +36,9 @@ function normalizeEditResult(result, structured = false) {
       };
     }
   }
-  if (result.status === "ok" && !result.svg_url) {
+  if (result.status === "ok" && !result.pptx_url) {
     result.message = "由于图表极为复杂，当前已进入后台专家队列进行深度处理。请告知用户图表正在处理中，并立即主动运行 `node scripts/recompile_contextweave.cjs --session_id <session_id>` 拉取结果（脚本内置自动轮询，默认最长等待约 20 分钟，生成完成即返回），不要让用户手动触发。";
-    result.svg_url = "WAITING_FOR_EXPERT_PROCESSING";
+    result.pptx_url = "WAITING_FOR_EXPERT_PROCESSING";
   }
   return result;
 }
@@ -76,35 +76,10 @@ async function main(argv = process.argv.slice(2), Client = CWClient) {
     return originalRequest(endpoint, payload, options);
   };
 
+  // 简化版：不落盘 CW 代码，仅下载 PPTX 产物
   const rawResult = await client.runGeneration({ inputFile, authoringFile, sessionId });
-  const result = normalizeEditResult(authoringFile ? validateAuthoringResult(rawResult, "svg") : rawResult, Boolean(authoringFile));
-  await saveAuthoringArtifacts(client, result, { outputName, outputDir, saveSource: true });
-
-  if (result.status === "ok" && result.cw_code) {
-    const fs = require("fs");
-    const path = require("path");
-
-    const filename = outputName ? `${outputName}.cw` : (result.session_id ? `${result.session_id}.cw` : "diagram.cw");
-    let targetDir = process.cwd();
-    if (outputDir) {
-      targetDir = path.resolve(outputDir);
-      if (!fs.existsSync(targetDir)) {
-        fs.mkdirSync(targetDir, { recursive: true });
-      }
-    }
-    const filePath = path.join(targetDir, filename);
-
-    let finalCode = result.cw_code;
-    if (result.session_id) {
-      finalCode = `# session_id: ${result.session_id}\n` + finalCode;
-    }
-    fs.writeFileSync(filePath, finalCode, "utf8");
-
-    // Remove cw_code from the output to prevent polluting LLM context window
-    delete result.cw_code;
-    result.saved_cw_file = filePath;
-  }
-
+  const result = normalizeEditResult(authoringFile ? validateAuthoringResult(rawResult, "pptx") : rawResult, Boolean(authoringFile));
+  await saveAuthoringArtifacts(client, result, { outputName, outputDir, saveSource: false });
 
   result.output_name = outputName;
   result.output_dir = outputDir;

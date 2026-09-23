@@ -1,0 +1,11 @@
+{
+  "slug": "interactive-architecture-diagram-pay",
+  "version": "1.0.0",
+  "openclaw": {
+    "emoji": "🧠",
+    "requires": {
+      "bins": ["node"],
+      "anyBins": ["alipay-bot"]
+    }
+  }
+}

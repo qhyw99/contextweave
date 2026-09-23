@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+const { validateAuthoringArgs, validateAuthoringResult, saveAuthoringArtifacts } = require("./authoring.cjs");
 const { CWClient, normalizeAssetResult, downloadAssetsLocally, printJson } = require("./cw_client.cjs");
 
 function parseArgs(argv) {
@@ -64,10 +65,16 @@ function normalizeGenerationResult(result) {
   return result;
 }
 
-async function main() {
-  const args = parseArgs(process.argv.slice(2));
+async function main(argv = process.argv.slice(2), Client = CWClient) {
+  const args = parseArgs(argv);
+  const authoringError = validateAuthoringArgs(args);
+  if (authoringError) { printJson(authoringError); process.exit(1); }
   const userRequest = args["--user_request"] || args["-u"];
   const inputFile = args["--input_file"] || args["-i"];
+  const enablePlan = args["--enable_plan"] === "true";
+  const outlineFile = args["--outline_file"];
+  const authoringFile = args["--authoring_file"];
+  const diagramType = args["--diagram_type"];
   const sessionId = args["--session_id"] || args["-s"];
   const inputSequenceRaw = args["--input_sequence"];
   const diagramStyle = args["--diagram_style"] || args["-d"];
@@ -76,12 +83,12 @@ async function main() {
   const n = parseInt(args["--n"] || "1", 10);
   const topK = parseInt(args["--top_k"] || "1", 10);
 
-  if (!userRequest && !inputFile) {
+  if (!userRequest && !inputFile && !authoringFile) {
     printJson({
       status: "error",
       error: {
         code: "MISSING_INPUT",
-        message: "必须至少提供 user_request 或 input_file",
+        message: "必须提供 authoring_file、user_request 或 input_file",
         recoverable: true,
         recovery_hint: "补充生成请求文本或输入文件后重试",
       },
@@ -107,10 +114,14 @@ async function main() {
     }
   }
 
-  const client = new CWClient();
+  const client = new Client();
   const rawResult = await client.runGeneration({
     userRequest,
     inputFile,
+    enablePlan,
+    outlineFile,
+    diagramType,
+    authoringFile,
     sessionId,
     inputSequence,
     validateRequestLength: true,
@@ -118,13 +129,14 @@ async function main() {
     n,
     topK,
   });
-  
-  const result = normalizeGenerationResult(rawResult);
+
+  const result = normalizeGenerationResult(authoringFile ? validateAuthoringResult(rawResult, "svg") : rawResult);
+  await saveAuthoringArtifacts(client, result, { outputName, outputDir, saveSource: true });
 
   if (result.status === "ok" && Array.isArray(result.choices)) {
     const fs = require("fs");
     const path = require("path");
-    
+
     if (result.session_id) {
       result.feedback_url = `https://pptx.chenxitech.site/feedback?session_id=${result.session_id}`;
     }
@@ -132,7 +144,7 @@ async function main() {
     for (let i = 0; i < result.choices.length; i++) {
       const choice = result.choices[i];
       const suffix = `_choice_${i + 1}`;
-      
+
       if (choice.cw_code) {
         const baseName = outputName || result.session_id || "diagram";
         const filename = `${baseName}${suffix}.cw`;
@@ -144,7 +156,7 @@ async function main() {
           }
         }
         const filePath = path.join(targetDir, filename);
-        
+
         let finalCode = choice.cw_code;
         // Optionally inject choice-specific session id if backend provides it, otherwise use root session_id
         const choiceSessionId = choice.session_id || result.session_id;
@@ -152,7 +164,7 @@ async function main() {
           finalCode = `# session_id: ${choiceSessionId}\n` + finalCode;
         }
         fs.writeFileSync(filePath, finalCode, "utf8");
-        
+
         delete choice.cw_code;
         choice.saved_cw_file = filePath;
       }
@@ -168,7 +180,7 @@ async function main() {
         pptx_url: choice.pptx_url,
       };
       await downloadAssetsLocally(tempObj);
-      
+
       if (tempObj.saved_svg_file) choice.saved_svg_file = tempObj.saved_svg_file;
       if (tempObj.saved_pptx_file) choice.saved_pptx_file = tempObj.saved_pptx_file;
       if (tempObj.message) choice.message = tempObj.message;
@@ -176,7 +188,7 @@ async function main() {
   } else if (result.status === "ok" && result.cw_code) {
     const fs = require("fs");
     const path = require("path");
-    
+
     const filename = outputName ? `${outputName}.cw` : (result.session_id ? `${result.session_id}.cw` : "diagram.cw");
     let targetDir = process.cwd();
     if (outputDir) {
@@ -186,13 +198,13 @@ async function main() {
       }
     }
     const filePath = path.join(targetDir, filename);
-    
+
     let finalCode = result.cw_code;
     if (result.session_id) {
       finalCode = `# session_id: ${result.session_id}\n` + finalCode;
     }
     fs.writeFileSync(filePath, finalCode, "utf8");
-    
+
     // Remove cw_code from the output to prevent polluting LLM context window
     delete result.cw_code;
     result.saved_cw_file = filePath;
@@ -215,4 +227,5 @@ async function main() {
   }
 }
 
-main();
+module.exports = { main };
+if (require.main === module) main();

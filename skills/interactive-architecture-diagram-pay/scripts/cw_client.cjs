@@ -135,35 +135,61 @@ function readBody(response) {
   });
 }
 
-const SKILL_VERSION = "9f91c96";
+function getSkillVersion() {
+  try {
+    const skillMdPath = path.join(__dirname, '..', 'SKILL.md');
+    if (fs.existsSync(skillMdPath)) {
+      const content = fs.readFileSync(skillMdPath, 'utf-8');
+      const match = content.match(/^version:\s*(.+)$/m);
+      if (match) {
+        return match[1].trim();
+      }
+    }
+  } catch (e) {}
+  return "unknown";
+}
+
+const SKILL_VERSION = getSkillVersion();
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isTransientNetworkError(error) {
+  if (!error) return false;
+  if (error.message === "timeout") return true;
+  return ["ECONNRESET", "ECONNREFUSED", "EPIPE", "ETIMEDOUT"].includes(error.code);
+}
 
 class CWClient {
   constructor() {
     const baseUrl = process.env.CW_API_BASE_URL || "https://pptx.chenxitech.site";
     this.baseUrl = baseUrl ? baseUrl.replace(/\/+$/, "") : "";
     this.timeoutMs = 3000000;
-    this.apiKey = this.loadApiKey();
+    this.maxRequestRetries = parseInt(process.env.CW_REQUEST_MAX_RETRIES || "3", 10);
+    this.retryBaseMs = parseInt(process.env.CW_REQUEST_RETRY_BASE_MS || "2000", 10);
     this.editorProtocol = process.env.CONTEXTWEAVE_EDITOR_PROTOCOL || "trae";
-  }
-
-  loadApiKey() {
-    const key = process.env.CONTEXTWEAVE_MCP_API_KEY;
-    return key || "94a05d02-9ade-4d9d-9f39-88734d9e34b4";
+    this.runEndpoint = process.env.CW_RUN_ENDPOINT || "/a2m/run";
   }
 
   validateBaseUrl() {
+    try {
+      const url = new URL(this.baseUrl);
+      if (url.hostname !== "pptx.chenxitech.site") {
+        return this.error("INVALID_DOMAIN", "Only pptx.chenxitech.site domain is allowed");
+      }
+    } catch (e) {
+      return this.error("INVALID_DOMAIN", "Invalid base URL");
+    }
     return null;
   }
 
-  headers() {
+  headers(requestId = null) {
     const headers = {
-      "X-Request-ID": this.createRequestId(),
+      "X-Request-ID": requestId || this.createRequestId(),
       "Content-Type": "application/json",
       "X-Skill-Version": SKILL_VERSION
     };
-    if (this.apiKey) {
-      headers["X-API-Key"] = this.apiKey;
-    }
     return headers;
   }
 
@@ -198,7 +224,7 @@ class CWClient {
     return result;
   }
 
-  async request(endpoint, payload) {
+  async request(endpoint, payload, options = {}) {
     const baseUrlError = this.validateBaseUrl();
     if (baseUrlError) {
       return baseUrlError;
@@ -207,14 +233,97 @@ class CWClient {
     if (this.editorProtocol) {
       body.editor_protocol = this.editorProtocol;
     }
+    const requestId = options.requestId || this.createRequestId();
+    const requestUrl = new URL(`${this.baseUrl}${endpoint}`);
+    if (requestUrl.pathname === "/a2m/run") {
+      const existingRequestId = requestUrl.searchParams.get("request_id");
+      if (existingRequestId && existingRequestId !== requestId) {
+        return this.error("INVALID_PAYMENT_REQUEST", "付费资源 URL 与 X-Request-ID 不一致");
+      }
+      requestUrl.searchParams.set("request_id", requestId);
+    }
 
+    for (let attempt = 1; attempt <= this.maxRequestRetries; attempt += 1) {
+      try {
+        const response = await this.postJson(requestUrl.toString(), body, requestId);
+        if (response.statusCode >= 500) {
+          // 5xx 视为瞬时故障，指数退避后重试
+          if (attempt < this.maxRequestRetries) {
+            const waitMs = this.retryBaseMs * Math.pow(2, attempt - 1);
+            process.stderr.write(`[retry ${attempt}/${this.maxRequestRetries}] 服务端 ${response.statusCode}，${waitMs / 1000}s 后重试...\n`);
+            await sleep(waitMs);
+            continue;
+          }
+          return this.error("API_ERROR", `${response.statusCode} ${response.statusMessage || "Server Error"}（已自动重试 ${this.maxRequestRetries} 次）`, true, "后端服务暂时不可用，请稍后重试；若持续失败请走 submit_feedback 兜底");
+        }
+        return this.handleResponse(response);
+      } catch (error) {
+        if (isTransientNetworkError(error) && attempt < this.maxRequestRetries) {
+          const waitMs = this.retryBaseMs * Math.pow(2, attempt - 1);
+          process.stderr.write(`[retry ${attempt}/${this.maxRequestRetries}] 网络瞬时故障（${error.message || error.code}），${waitMs / 1000}s 后重试...\n`);
+          await sleep(waitMs);
+          continue;
+        }
+        return this.error("API_ERROR", String(error.message || error), true, "请检查网络或后端服务状态后重试");
+      }
+    }
+  }
+
+  handleResponse(response) {
     try {
-      const response = await this.postJson(`${this.baseUrl}${endpoint}`, body);
       if (response.statusCode === 402) {
-        return this.error("PAYMENT_REQUIRED", "Insufficient credits", true, "额度不足。可引导用户免费领取：询问用户邮箱 → 运行 request_quota_code.cjs --email <邮箱> 发送验证码 → 询问验证码 → 运行 redeem_quota_code.cjs --email <邮箱> --code <验证码> → 用户查收邮件按指引配置 CONTEXTWEAVE_MCP_API_KEY 后重试。");
+        const rawPaymentNeeded = response.headers && response.headers["payment-needed"];
+        const paymentNeeded = Array.isArray(rawPaymentNeeded)
+          ? rawPaymentNeeded[0]
+          : rawPaymentNeeded;
+
+        if (typeof paymentNeeded === "string" && paymentNeeded.trim()) {
+          const configuredBillFile = process.env.CONTEXTWEAVE_A2M_BILL_FILE;
+          let savedBillFile = null;
+
+          if (configuredBillFile) {
+            const pathError = this.validateSafePath(configuredBillFile);
+            if (pathError) {
+              return pathError;
+            }
+            try {
+              const billFile = path.resolve(configuredBillFile);
+              fs.mkdirSync(path.dirname(billFile), { recursive: true, mode: 0o700 });
+              fs.writeFileSync(billFile, paymentNeeded.trim(), { encoding: "utf8", mode: 0o600 });
+              try { fs.chmodSync(billFile, 0o600); } catch (e) {}
+              savedBillFile = billFile;
+            } catch (error) {
+              return this.error(
+                "PAYMENT_STATE_WRITE_FAILED",
+                `无法保存支付账单：${String(error.message || error)}`,
+                true,
+                "检查支付状态目录是否位于当前工作区且可写"
+              );
+            }
+          }
+
+          const result = this.error(
+            "A2M_PAYMENT_REQUIRED",
+            "支付宝 A2M 支付授权尚未完成",
+            true,
+            savedBillFile
+              ? "读取账单摘要并取得用户对本次金额的明确确认后，再由支付宝官方支付组件继续"
+              : "请改用 contextweave_paid.mjs 的 probe 流程生成受保护的账单状态"
+          );
+          result.payment = {
+            protocol: "A2M",
+            bill_saved: Boolean(savedBillFile),
+          };
+          if (savedBillFile) {
+            result.payment.bill_file = savedBillFile;
+          }
+          return result;
+        }
+
+        return this.error("A2M_PROTOCOL_ERROR", "402 response is missing Payment-Needed", true, "停止付款并检查 /a2m/run 的 A2M 服务配置；不要切换到免费入口");
       }
       if (response.statusCode === 403) {
-        return this.error("AUTH_ERROR", "Invalid API key or missing key", true, "请检查 CONTEXTWEAVE_MCP_API_KEY");
+        return this.error("AUTH_ERROR", "Paid endpoint rejected access", true, "检查 A2M 服务配置；付费 Skill 不使用免费版 API Key");
       }
       if (response.statusCode === 426) {
         let parsed = {};
@@ -233,7 +342,7 @@ class CWClient {
           const parsed = JSON.parse(response.body);
           errorMsg = parsed.detail || parsed.error || errorMsg;
         } catch (e) {}
-        return this.error("RATE_LIMIT_EXCEEDED", errorMsg, true, "免费体验额度已用完或请求过于频繁。可稍后重试，或引导用户免费领取专属 API Key：询问用户邮箱 → 运行 request_quota_code.cjs --email <邮箱> 发送验证码 → 询问验证码 → 运行 redeem_quota_code.cjs --email <邮箱> --code <验证码> → 用户查收邮件按指引配置 CONTEXTWEAVE_MCP_API_KEY 后重试。");
+        return this.error("A2M_RATE_LIMITED", errorMsg, true, "保持原 X-Request-ID 稍后重试同一请求；不要自动重新付款或改走免费入口");
       }
       if (response.statusCode === 400 || response.statusCode === 409) {
         let errorMsg = `${response.statusCode} ${response.statusMessage || "Request failed"}`;
@@ -268,15 +377,34 @@ class CWClient {
     }
   }
 
-  async postJson(urlString, body) {
+  async postJson(urlString, body, requestId = null) {
     const requestData = JSON.stringify(body);
+    const headers = {
+      ...this.headers(requestId),
+      "Content-Length": Buffer.byteLength(requestData),
+    };
     const requestOptions = {
       method: "POST",
-      headers: {
-        ...this.headers(),
-        "Content-Length": Buffer.byteLength(requestData),
-      },
+      headers,
     };
+
+    const requestFile = process.env.CONTEXTWEAVE_A2M_REQUEST_FILE;
+    if (requestFile && urlString.includes("/a2m/run")) {
+      const pathError = this.validateSafePath(requestFile);
+      if (pathError) throw new Error(pathError.error.message);
+      const safeHeaders = {
+        "Content-Type": headers["Content-Type"],
+        "X-Request-ID": headers["X-Request-ID"],
+        "X-Skill-Version": headers["X-Skill-Version"],
+      };
+      fs.mkdirSync(path.dirname(requestFile), { recursive: true, mode: 0o700 });
+      fs.writeFileSync(
+        requestFile,
+        `${JSON.stringify({ url: urlString, method: "POST", body: requestData, headers: safeHeaders }, null, 2)}\n`,
+        { encoding: "utf8", mode: 0o600 }
+      );
+      try { fs.chmodSync(requestFile, 0o600); } catch (e) {}
+    }
 
     try {
       const response = await makeRequest(urlString, requestOptions, requestData, this.timeoutMs);
@@ -285,6 +413,7 @@ class CWClient {
       return {
         statusCode: response.statusCode,
         statusMessage: response.statusMessage,
+        headers: response.headers || {},
         body: responseBody,
       };
     } catch (error) {
@@ -300,15 +429,13 @@ class CWClient {
     if (baseUrlError) return baseUrlError;
     try {
       const response = await makeRequest(`${this.baseUrl}/capabilities`, { method: "GET", headers: this.headers() }, null, Math.min(this.timeoutMs, 30000));
-      const body = await readBody(response);
-      if (response.statusCode < 200 || response.statusCode >= 300) return this.error("AUTHORING_CAPABILITY_CHECK_FAILED", `能力查询返回 HTTP ${response.statusCode}`, true);
-      return JSON.parse(body);
+      return this.handleResponse({ statusCode: response.statusCode, statusMessage: response.statusMessage, headers: response.headers || {}, body: await readBody(response) });
     } catch (error) {
       return this.error("AUTHORING_CAPABILITY_CHECK_FAILED", String(error.message || error), true, "能力查询失败，未提交生成请求；检查后端后重试");
     }
   }
 
-  async runGeneration({ userRequest, basePalette = null, accentTargets = null, morphology = null, diagramType = null, outlineFile = null, authoringFile = null, inputFile = null, sessionId = null, inputSequence = null, validateRequestLength = false, diagramStyle = null, enablePlan = false, n = 1, topK = 1 }) {
+  async runGeneration({ userRequest, diagramType = null, outlineFile = null, authoringFile = null, inputFile = null, sessionId = null, inputSequence = null, validateRequestLength = false, diagramStyle = null, morphology = null, accentTargets = null, basePalette = null, enablePlan = false, n = 1, topK = 1 }) {
     const payload = {
       input_sequence: inputSequence,
       export_svg: true,
@@ -317,13 +444,14 @@ class CWClient {
       test_file: null,
       n: n,
       top_k: topK,
-      wrap_svg_in_html: false,
     };
     if (authoringFile) {
       if (basePalette) payload.base_palette = basePalette;
       const error = await prepareAuthoring(this, { authoringFile, userRequest, inputFile, outlineFile, inputSequence, enablePlan, diagramStyle, morphology, diagramType, accentTargets, n, topK }, payload);
       if (error) return error;
-      return this.request("/run", payload);
+      const requestId = this.createRequestId();
+      const separator = this.runEndpoint.includes("?") ? "&" : "?";
+      return this.request(`${this.runEndpoint}${separator}request_id=${encodeURIComponent(requestId)}`, payload, { requestId });
     }
     if (diagramType) {
       if (!["auto", "general", "swimlane"].includes(diagramType)) return this.error("INVALID_DIAGRAM_TYPE", "diagram_type 必须为 auto、general 或 swimlane");
@@ -332,6 +460,15 @@ class CWClient {
 
     if (diagramStyle) {
       payload.diagram_style = diagramStyle;
+    }
+    if (morphology) {
+      payload.morphology = morphology;
+    }
+    if (accentTargets) {
+      payload.accent_targets = accentTargets;
+    }
+    if (basePalette) {
+      payload.base_palette = basePalette;
     }
 
     // Add use_unified_bot flag if explicitly set via environment variable
@@ -416,7 +553,17 @@ class CWClient {
       }
     }
 
-    return this.request("/run", payload);
+    const requestId = this.createRequestId();
+    const separator = this.runEndpoint.includes("?") ? "&" : "?";
+    const paidEndpoint = `${this.runEndpoint}${separator}request_id=${encodeURIComponent(requestId)}`;
+    const result = await this.request(paidEndpoint, payload, { requestId });
+    // 打印服务端透传的 lint 软警告（仅提示，不影响成功判定与返回值）
+    if (result && Array.isArray(result.warnings) && result.warnings.length > 0) {
+      for (const warning of result.warnings) {
+        console.error(`[generation warnings] ${warning}`);
+      }
+    }
+    return result;
   }
 
   async exportSessionAsset(sessionId, formatName) {
@@ -497,10 +644,6 @@ function normalizeAssetResult(result) {
   delete result.preferred_asset_url;
   delete result.url;
 
-  if (result.svg_url && typeof result.svg_url === "string") {
-    result.svg_url = result.svg_url.replace(/\.html(\?.*)?$/, '.svg$1');
-  }
-
   return result;
 }
 
@@ -561,11 +704,10 @@ async function downloadAssetsLocally(result) {
   }
 
   // Handle svg_url or raw_svg_url
-  let svgUrl = result.raw_svg_url || result.svg_url;
+  const svgUrl = result.raw_svg_url || result.svg_url;
   if (svgUrl && svgUrl !== "WAITING_FOR_EXPERT_PROCESSING") {
     // If it's HTML wrapper, the download might get HTML. It's better to fetch raw_svg_url if available, or just download what's there.
-    svgUrl = svgUrl.replace(/\.html(\?.*)?$/, '.svg$1');
-    const ext = ".svg";
+    const ext = svgUrl.includes(".html") ? ".html" : ".svg";
     const dest = path.join(targetDir, `${outputName}${ext}`);
     try {
       await downloadFile(svgUrl, dest);
@@ -576,11 +718,14 @@ async function downloadAssetsLocally(result) {
     }
   }
 
-  // Handle pptx_url
-  if (result.pptx_url) {
+  // Handle generation responses (pptx_url) and explicit session exports
+  // whose primary URL is returned as download_url.
+  const pptxFormats = ["pptx", "pptx-svg", "pptx-native"];
+  const pptxUrl = result.pptx_url || (pptxFormats.includes(result.format) ? result.download_url : null);
+  if (pptxUrl) {
     const dest = path.join(targetDir, `${outputName}.pptx`);
     try {
-      await downloadFile(result.pptx_url, dest);
+      await downloadFile(pptxUrl, dest);
       result.saved_pptx_file = dest;
       result.message = (result.message ? result.message + "\n" : "") + `PPTX 资源已自动下载到本地：${dest}`;
     } catch (err) {

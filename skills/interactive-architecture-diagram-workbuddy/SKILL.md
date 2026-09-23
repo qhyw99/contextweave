@@ -1,5 +1,10 @@
 ---
 name: interactive-architecture-diagram-workbuddy
+slug: contextweave-interactive-architecture-workbuddy
+displayName: 架构图一键生成（Workbuddy）
+version: 1.3.0
+summary: 在 Workbuddy 中生成交互式结构图，支持结构化泳道、层级卡片、共享轨道矩阵与内联 SVG
+license: MIT
 description: 强大的AI自动化绘图与复杂信息可视化工具（基于 ContextWeave）。Workbuddy 增强版：支持生成并在对话框内直接展示内联 SVG 图形。通过深度的语义分析与请求编排，一键将晦涩文本与复杂知识转化为清晰直观的图形表达。
 metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] } } }
 ---
@@ -7,6 +12,14 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] } } }
 # ContextWeave Skill
 
 本 Skill 的定位是“绘图请求客户端”，负责把用户需求转换为可执行的绘图意图，并通过基于文件生成的单一路径与后端协同完成产出。
+
+## 结构化生成优先路由
+
+先判断能否完整保留用户的内容和关系：顺序跨角色交接用泳道，分区嵌套用层级卡片，各列共享行与跨行用矩阵。适配时自动选用结构化路径，无需用户知道模板名称，也无需为此等待普通骨架选择；不适配时使用普通生成并显式传 `--diagram_type general`。
+
+读取 [结构化调用与编辑](references/authoring.md)，再按当前结构只读取一份协议：[泳道 JSON](references/authoring-swimlane.md)、[层级卡片](references/authoring-cards.md)或[共享轨道矩阵](references/authoring-matrix.md)。新建泳道默认 JSON，网格默认薄 HTML，已有 JSON 直接复用；每次只写一种输入。
+
+这条路径以 `--authoring_file` 取代普通流程的请求文件和 CW，直接表达内容、分组、顺序、真实关系、列数与跨度；不写 D2、宽高、坐标或 CSS。规范模型由脚本保存，后续编辑保留其 ID。仅普通路径遵循下文的 `# Request` / `# CW` 和骨架选择流程。生成与导出仍使用当前变体的既有入口和授权范围。
 
 ## 哲学层
 

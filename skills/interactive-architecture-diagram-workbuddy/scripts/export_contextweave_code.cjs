@@ -18,8 +18,8 @@ function parseArgs(argv) {
   return args;
 }
 
-async function main() {
-  const args = parseArgs(process.argv.slice(2));
+async function main(argv = process.argv.slice(2), Client = CWClient) {
+  const args = parseArgs(argv);
   const sessionId = args["--session_id"] || args["-s"];
   const targetPath = args["--path"] || args["-p"] || "ContextWeave";
 
@@ -36,12 +36,13 @@ async function main() {
     process.exit(1);
   }
 
-  const client = new CWClient();
-  const result = await client.exportCode(sessionId, targetPath);
+  const client = new Client();
+  const result = await client.exportCode(sessionId, targetPath, args["--format"] || "cw");
   printJson(result);
   if (result.status === "error") {
     process.exit(1);
   }
 }
 
-main();
+module.exports = { main };
+if (require.main === module) main();

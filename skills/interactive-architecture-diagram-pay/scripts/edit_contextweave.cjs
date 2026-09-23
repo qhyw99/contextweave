@@ -70,7 +70,7 @@ async function main(argv = process.argv.slice(2), Client = CWClient) {
   // Legacy CW edits retain stage2 behavior; structured edits compile directly.
   const originalRequest = client.request.bind(client);
   client.request = async (endpoint, payload, options) => {
-    if (!payload.authoring && (endpoint === "/run" || endpoint.startsWith("/run?"))) {
+    if (!payload.authoring && (endpoint === "/a2m/run" || endpoint.startsWith("/a2m/run?"))) {
       payload.stage_execution = "stage2_only";
     }
     return originalRequest(endpoint, payload, options);

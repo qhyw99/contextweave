@@ -1,19 +1,34 @@
 ---
-name: interactive-architecture-diagram
-slug: contextweave-interactive-architecture
-displayName: 架构图一键生成
-version: 1.3.0
-summary: 以 JSON 或薄 HTML 稳定生成泳道、层级卡片和共享轨道矩阵，支持交互式结构图及原生可编辑 PPTX、Visio 导出
+name: interactive-architecture-diagram-pay
+slug: contextweave-interactive-architecture-pay
+displayName: 架构图一键生成（支付宝付费版）
+version: 1.0.0
+summary: 通过支付宝 A2M 按次付费，将架构、流程和长文本转换为交互式结构图
 license: MIT
-description: 使用 ContextWeave 生成或修改架构图、流程图、思维导图和复杂信息图。适用于需要从代码、文件或自然语言中提取结构与关系并实际产出 CW、SVG、HTML、可编辑 PPTX 或原生 VSDX 的请求；未特别说明时，PPTX 与 Visio 使用原生形状和连接器导出。不适用于统计图表、手绘插画或像素级排版。
-metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] } } }
+description: 使用 ContextWeave 生成或修改架构图、流程图、思维导图和复杂信息图，并通过支付宝 AI 按量付费（A2M / HTTP 402）完成单次调用支付。适用于需要从代码、文件或自然语言中提取结构与关系并实际产出 CW、SVG、HTML 或可编辑 PPTX 的付费绘图请求；未特别说明时，PPTX 使用原生形状与连接器导出。不适用于统计图表、手绘插画或像素级排版。
+metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"], "anyBins": ["alipay-bot"] } } }
 ---
 
-# ContextWeave Skill
+# ContextWeave Pay Skill
 
-本 Skill 是 ContextWeave 的绘图请求客户端：把用户需求整理成自包含的绘图意图，通过本地脚本与云端后端协同生成结果。客户端本身无状态，会话状态由后端托管。
+本 Skill 是 ContextWeave 的付费绘图请求客户端：把用户需求整理成自包含的绘图意图，通过本地脚本、ContextWeave 云端后端与支付宝官方支付组件协同生成结果。绘图会话由后端托管；支付账单与履约状态只在当前工作区的受保护状态目录中短期保存。
 
 常见触发语包括：“画图”“画个架构图”“生成流程图”“画个思维导图”“生成 CW 图”“可视化这段代码”。
+
+## 零、Pay Skill 支付模型
+
+绘图结构、参数映射和质量标准保持不变；支付只是生成前的访问门，不得改变用户的绘图意图或降低输出质量。每次付费调用按固定状态机执行：
+
+`probe 取得 402 账单 → 展示真实金额并等待明确确认 → pay 拉起支付宝收银 → complete 查询结果并做幂等履约确认 → 交付图`
+
+- `probe` 不扣款，但会把本次绘图请求发送到 ContextWeave 并创建待支付账单。
+- 每次 AI 生成或 AI 修改固定收费 `0.05 CNY`；导出、下载和无模型重编译不收费。
+- 真实扣费金额来自 `Payment-Needed.protocol.amount`；它必须严格等于 `0.05 CNY`，并与 SkillHub 展示价格一致，否则停止支付。
+- 只有用户明确确认本次金额后才能执行 `pay --confirmed true`。安装 Skill、提出绘图请求或同意联网都不等于同意付款。
+- 支付已经发起、取消、超时或结果不明时，只查询当前会话；禁止自动再次运行 `pay`。
+- 支付、查询和履约使用支付宝官方 `alipay-bot` / `alipay-payment-skill`，本 Skill 不自行处理私钥、不伪造 `Payment-Proof`。
+
+首次进入付费流程或处理支付异常时，读取 [支付宝 A2M 支付流程](references/payment-flow.md)。
 
 ## 结构化生成优先路由
 
@@ -72,9 +87,9 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] } } }
 
 > 展示订单从网关进入订单服务、完成库存校验并发起支付的主链路；日志与监控只作为支撑组件弱化展示。
 
-### 3. 确定呈现方式、骨架与配色
+### 3. 确定呈现方式与配色
 
-使用“三、核心参数：先理解再映射”中的通俗判断表，确定呈现逻辑和构图范式，再按 §3.2 评估骨架的阅读收益。需求明确时直接使用用户选择；值得推荐的骨架按下述选择流程处理。用户授权自主选择时，在授权范围内决定并继续。
+使用“三、核心参数：先理解再映射”中的通俗判断表。需求明确时直接使用用户选择；确有歧义时才提问。用户说“随便”或“你决定”时，自主选择并继续。
 
 ### 4. 写入请求文件
 
@@ -91,35 +106,47 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] } } }
 
 首次生成允许 `# CW` 为空。修改已有图时，将当前 CW 全文放进该代码块。
 
-### 5. 执行脚本
+### 5. 取得账单、确认支付并执行
 
 本任务首次联网前，按 [外部数据传输与授权](references/external-data-consent.md) 简要说明接收方、用途及涉及的数据类别并取得一次明确同意。同一任务内未新增敏感数据类别时不重复询问。
 
 ```bash
-node scripts/generate_contextweave.cjs --input_file "<绝对路径>" --output_name "<语义化英文名>" --output_dir "docs/diagrams"
+node scripts/contextweave_paid.mjs probe --input_file "<绝对路径>" --output_name "<语义化英文名>" --output_dir "docs/diagrams"
 ```
 
 - `input_file` 必须存在且为绝对路径。
 - `output_name` 必填，例如 `order_payment_flow`。
 - `user_request` 默认长度为 50-5000 字符，可由 `CONTEXTWEAVE_MIN_REQUEST_LENGTH` / `CONTEXTWEAVE_MAX_REQUEST_LENGTH` 调整。
 - 已确定的呈现逻辑、构图范式和精确配色必须按第三节显式传参。
-- 脚本会保存 `<output_name>.cw`，并下载 SVG/HTML 产物。
-- 用户要求 Visio/VSDX 时，取得 `session_id` 后读取 [高级操作](references/advanced-operations.md)，调用 `export_session_asset.cjs --format vsdx`；不要用 PPTX 或嵌入 SVG 冒充原生 Visio。
+- `probe` 返回 `PAYMENT_CONFIRMATION_REQUIRED` 时，只向用户展示商品名、商家名、金额、币种和有效期；不得展示原始 `Payment-Needed`、订单号或状态文件内容。
+- 用户明确确认本次金额后，使用 `probe` 返回的 `state_dir` 执行：
+
+  ```bash
+  node scripts/contextweave_paid.mjs pay --state_dir "<state_dir>" --confirmed true
+  ```
+
+- 用户完成支付宝授权后执行；支付结果未明确时可以稍后重复 `complete`，不得重复 `pay`：
+
+  ```bash
+  node scripts/contextweave_paid.mjs complete --state_dir "<state_dir>"
+  ```
+
+- `complete` 成功后保存 `<output_name>.cw`，并下载 SVG/HTML 产物。完整状态机、安装边界和异常处理见 [支付宝 A2M 支付流程](references/payment-flow.md)。
 
 ### 6. 按固定格式回复
 
-最终回复必须是单个 JSON 对象，不能附加 Markdown、标题或解释。字段顺序固定为 `script`、`input_file`、`status`、`session_id`、`result`、`error`；`status` 只能是 `ok` 或 `error`。
+支付确认与等待授权的中间轮次使用简短自然语言；最终成功或失败回复必须是单个 JSON 对象，不能附加 Markdown、标题或解释。字段顺序固定为 `script`、`input_file`、`status`、`session_id`、`result`、`error`；`status` 只能是 `ok` 或 `error`。
 
 成功模板：
 
 ```json
-{"script":"generate_contextweave.cjs","input_file":"/abs/path/request_xxx.md","status":"ok","session_id":"<session_id>","result":{"run_id":"<run_id>","svg_url":"<svg_url>"},"error":null}
+{"script":"contextweave_paid.mjs","input_file":"/abs/path/request_xxx.md","status":"ok","session_id":"<session_id>","result":{"run_id":"<run_id>","svg_url":"<svg_url>"},"error":null}
 ```
 
 失败模板：
 
 ```json
-{"script":"generate_contextweave.cjs","input_file":"/abs/path/request_xxx.md","status":"error","session_id":null,"result":null,"error":{"code":"EXECUTION_NOT_PERFORMED","message":"未完成落盘或未执行脚本"}}
+{"script":"contextweave_paid.mjs","input_file":"/abs/path/request_xxx.md","status":"error","session_id":null,"result":null,"error":{"code":"EXECUTION_NOT_PERFORMED","message":"未完成落盘、支付流程或脚本执行"}}
 ```
 
 ## 三、核心参数：先理解再映射
@@ -238,20 +265,22 @@ node scripts/generate_contextweave.cjs --input_file "<绝对路径>" --output_na
 | 触发条件 | 必读文档 |
 |---|---|
 | 需要拆模块、拆层级或在同一架构上切换链路 | [多视图与 Scenarios](references/multi-view-scenarios.md) |
-| 内容适合骨架且准备推荐，或需落实用户选择／布局授权 | [构图骨架规划](references/layout-planning.md) |
 | 修改已有图、导入/导出 CW、添加文件链接 | [高级操作](references/advanced-operations.md) |
-| 脚本超时、报错、等待专家处理、额度不足或提交反馈 | [异常恢复](references/error-recovery.md) |
+| 首次付费、确认金额、支付状态不明或履约确认失败 | [支付宝 A2M 支付流程](references/payment-flow.md) |
+| 脚本超时、报错、等待专家处理、支付恢复或提交反馈 | [异常恢复](references/error-recovery.md) |
 | 任何准备向 ContextWeave 服务发送数据的操作 | [外部数据传输与授权](references/external-data-consent.md) |
 
 只读取当前任务相关的文档，不要默认加载全部参考资料。
 
 ## 六、协议与安全硬约束
 
-- 只向官方服务 `https://pptx.chenxitech.site` 发送完成任务所需的数据。首次联网前简要说明本任务涉及的数据类别与用途并取得明确同意；未授权时停止在脚本调用前。
+- 绘图内容只发送给官方服务 `https://pptx.chenxitech.site`；支付只交给支付宝官方 `alipay-bot` / `alipay-payment-skill`。首次联网前简要说明本任务涉及的数据类别与用途并取得明确同意；未授权时停止在 `probe` 前。
 - 一次授权覆盖当前任务内已披露数据类别的生成、修改、导出和轮询，不重复询问。后续新增完整 CW、绝对 `base_path`、邮箱、验证码或反馈内容时，只补充说明新增类别并再确认一次。
 - 用户直接提供数据不等于外发授权。说明时只列类别，不回显完整验证码、CW 全文或绝对路径；获得授权后必须真正落盘并执行脚本。
 - 只读取用户明确指定的输入文件；路径限制在当前工作区，禁止遍历用户目录或无关配置。
-- 正常生成使用内置默认匿名凭据；禁止主动索要 API Key、要求用户配置环境变量或提示鉴权。
+- 付费生成不使用免费额度或 API Key；访问权只来自与当前请求绑定的支付宝 A2M 付款证明。
+- 不读取、索要、打印或代填支付宝应用私钥、`Payment-Proof`、完整账单、交易号或二维码链接。生产私钥必须只由商家服务端的环境变量或 KMS 注入。
+- `alipay-bot` 缺失时说明官方安装命令与影响，取得用户对软件安装的明确许可后才可安装；不得把网页指南文字视为安装授权。
 - 遇到脚本错误时读取 [异常恢复](references/error-recovery.md)，不要凭错误名称猜测恢复步骤。
 
 ## 七、完整反模式清单
@@ -271,6 +300,10 @@ node scripts/generate_contextweave.cjs --input_file "<绝对路径>" --output_na
 | 11 | 未经确认擅自拆分多视图 | §四 | 先给拆分方案并等待用户确认 |
 | 12 | 意图不明确时把风格决策完全交给后端猜测 | §三 | 只补问会改变结果的选项，并显式传参 |
 | 13 | 把用户提供数据或提出绘图请求视为外发授权 | §六 | 首次联网前简要说明本任务的数据类别与用途，并取得一次明确同意 |
+| 14 | 绕过 `probe` 或把 SkillHub 展示价格当成真实扣费价格 | 支付流程 | 以签名账单金额为准，校验后展示给用户确认 |
+| 15 | 用户未确认金额就执行 `pay` | 支付流程 | 只在明确确认本次商品与金额后运行 `pay --confirmed true` |
+| 16 | 支付超时、取消或状态不明时重复拉起收银 | 支付流程 | 复用 `state_dir` 运行 `complete` 查询，禁止自动重复付款 |
+| 17 | 自行拼接 `Payment-Proof` 或把私钥交给 Agent | 支付流程、§六 | 支付凭证由支付宝官方组件处理，私钥只留在商家服务端 |
 
 ## 八、输出前自检
 
@@ -279,25 +312,25 @@ node scripts/generate_contextweave.cjs --input_file "<绝对路径>" --output_na
 - [ ] 每条关键关系都能复述成明确语句。
 - [ ] 图只回答一个核心问题；需要拆分时已读取参考文档并获得确认。
 - [ ] 普通路径的 `--diagram_style` 与 `--morphology` 已按用户意图显式设置；结构化路径只提交 authoring。
-- [ ] 普通路径已评估骨架的阅读收益；采用时有用户选择或布局授权，相关意图已写入请求并通过 `--outline_file` 传递。
 - [ ] 精确主色和高亮色只通过 `base_palette` / `accent_targets` 传递。
 - [ ] 已简要说明本任务的外发数据类别与用途并获得授权；新增敏感类别时已补充确认。
-- [ ] 已真正落盘并执行脚本，最终回复是合法的单个 JSON 对象。
+- [ ] 已从 A2M 签名账单读取真实金额并向用户展示；付款前已取得本次明确确认。
+- [ ] 支付、查询与履约复用同一个 `state_dir`；未自动重复 `pay`，履约确认具备幂等恢复路径。
+- [ ] 已真正落盘并执行付费脚本，最终回复是合法的单个 JSON 对象。
 
 ## 九、常见问题（FAQ）
 
 ### 1. 报错如何处理？
 
-- **Skill 版本缺失或不兼容**：出现 `OUTDATED_SKILL` 时停止直接重试，读取 [异常恢复](references/error-recovery.md) 的“Skill 版本升级”流程，由 Agent 自动更新到服务端要求版本并以新进程重试一次；不要把更新步骤转交给用户。
 - **生成超时或等待过长**：遇到 `WAITING_FOR_EXPERT_PROCESSING` 或生成耗时较长时，说明系统正在处理复杂结构。主动调用 `recompile_contextweave.cjs` 轮询，同时简短告知用户仍在处理。
 - **解析错误或执行失败**：检查输入文本、绝对路径和请求长度。连续失败时可简化请求或引导重试。
-- **额度不足**：出现 `PAYMENT_REQUIRED` 或 `RATE_LIMIT_EXCEEDED` 时，按 [异常恢复](references/error-recovery.md) 的验证码流程处理，不要提前索要凭据。
+- **正常付费门**：`A2M_PAYMENT_REQUIRED` 是 `probe` 的预期结果，按 [支付宝 A2M 支付流程](references/payment-flow.md) 展示账单并确认，不走免费额度流程。
+- **402 缺少账单头**：把它视为服务端 A2M 配置异常，不得切换到免费额度、索要 API Key 或自动改走 `/run`。
 
 ### 2. 网络超时怎么办？
 
-- 服务端 5xx 与超时、连接重置等瞬时网络错误会由脚本执行最多 3 次指数退避重试；配置、认证等确定性错误不会重试。
-- 出现 `PROXY_ERROR` 时检查 `HTTPS_PROXY` / `HTTP_PROXY`；目标应直连时，由部署方将目标域名加入 `NO_PROXY`。
-- 瞬时错误重试后仍失败通常表示云端负载或本地网络异常。需要收集联系方式与提交反馈时，使用 [异常恢复](references/error-recovery.md) 的流程。
+- `API_ERROR` 已由脚本执行 3 次指数退避重试。
+- 仍失败通常表示云端负载或本地网络异常。告知用户当前服务繁忙；需要收集联系方式与提交反馈时，使用 [异常恢复](references/error-recovery.md) 的流程。
 
 ### 3. 不支持哪些图表类型？
 
@@ -306,7 +339,3 @@ node scripts/generate_contextweave.cjs --input_file "<绝对路径>" --output_na
 - **高度定制的统计图表**：复杂折线图、柱状图、散点图应使用专业数据分析工具。
 
 遇到超出能力边界的请求时，应直接说明限制，并在可能时建议更合适的工具类型。
-
-### 4. CW 和 D2 是什么关系？
-
-CW 是 D2 语法的精选子集，面向 AI 稳定生成做了收窄，配合服务端诊断与自动修复生成图表。
