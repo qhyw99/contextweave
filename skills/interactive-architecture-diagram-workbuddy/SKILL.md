@@ -2,7 +2,7 @@
 name: interactive-architecture-diagram-workbuddy
 slug: contextweave-interactive-architecture-workbuddy
 displayName: 架构图一键生成（Workbuddy）
-version: 1.5.0
+version: 1.6.0
 summary: 在 Workbuddy 中生成交互式结构图，支持结构化泳道、层级卡片、共享轨道矩阵与内联 SVG
 license: MIT
 description: 强大的AI自动化绘图与复杂信息可视化工具（基于 ContextWeave）。Workbuddy 增强版：支持生成并在对话框内直接展示内联 SVG 图形。通过深度的语义分析与请求编排，一键将晦涩文本与复杂知识转化为清晰直观的图形表达。
@@ -19,7 +19,7 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] } } }
 
 读取 [结构化调用与编辑](references/authoring.md)，再按当前结构只读取一份协议：[泳道 JSON](references/authoring-swimlane.md)、[层级卡片](references/authoring-cards.md)或[共享轨道矩阵](references/authoring-matrix.md)。新建泳道与共享轨道矩阵默认 JSON，层级卡片可用薄 HTML，已有 JSON 直接复用；每次只写一种输入。
 
-这条路径以 `--authoring_file` 取代普通流程的请求文件和 CW，直接表达内容、分组、顺序、真实关系、列数与跨度；不写 D2、宽高、坐标或 CSS。规范模型由脚本保存，后续编辑保留其 ID。仅普通路径遵循下文的 `# Request` / `# CW` 和骨架选择流程。生成与导出仍使用当前变体的既有入口和授权范围。
+这条路径以 `--authoring_file` 取代普通流程的请求文件和 CW，直接表达内容、分组、顺序、真实关系、必要的布局约束与跨度；不写 D2、宽高、坐标或 CSS。规范模型由脚本保存，后续编辑保留其 ID。 卡片内部列数优先交给自动 Grid；若无法可靠判断分组、主次或阅读顺序，先给出简短结构草案让用户确认，再提交。用户已明确或已确认的结构直接沿用，不要求逐一确认行列数字。仅普通路径遵循下文的 `# Request` / `# CW` 和骨架选择流程。生成与导出仍使用当前变体的既有入口和授权范围。
 
 ## 哲学层
 

@@ -2,7 +2,7 @@
 name: interactive-architecture-diagram
 slug: contextweave-interactive-architecture
 displayName: 架构图一键生成
-version: 1.5.0
+version: 1.6.0
 summary: 以 JSON 或薄 HTML 稳定生成泳道、层级卡片和共享轨道矩阵，支持交互式结构图及原生可编辑 PPTX、Visio 导出
 license: MIT
 description: 使用 ContextWeave 生成或修改架构图、流程图、思维导图和复杂信息图。适用于需要从代码、文件或自然语言中提取结构与关系并实际产出 CW、SVG、HTML、可编辑 PPTX 或原生 VSDX 的请求；未特别说明时，PPTX 与 Visio 使用原生形状和连接器导出。不适用于统计图表、手绘插画或像素级排版。
@@ -21,7 +21,7 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] } } }
 
 读取 [结构化调用与编辑](references/authoring.md)，再按当前结构只读取一份协议：[泳道 JSON](references/authoring-swimlane.md)、[层级卡片](references/authoring-cards.md)或[共享轨道矩阵](references/authoring-matrix.md)。新建泳道与共享轨道矩阵默认 JSON，层级卡片可用薄 HTML，已有 JSON 直接复用；每次只写一种输入。
 
-这条路径以 `--authoring_file` 取代普通流程的请求文件和 CW，直接表达内容、分组、顺序、真实关系、列数与跨度；不写 D2、宽高、坐标或 CSS。规范模型由脚本保存，后续编辑保留其 ID。仅普通路径遵循下文的 `# Request` / `# CW` 和骨架选择流程。生成与导出仍使用当前变体的既有入口和授权范围。
+这条路径以 `--authoring_file` 取代普通流程的请求文件和 CW，直接表达内容、分组、顺序、真实关系、必要的布局约束与跨度；不写 D2、宽高、坐标或 CSS。规范模型由脚本保存，后续编辑保留其 ID。 卡片内部列数优先交给自动 Grid；若无法可靠判断分组、主次或阅读顺序，先给出简短结构草案让用户确认，再提交。用户已明确或已确认的结构直接沿用，不要求逐一确认行列数字。仅普通路径遵循下文的 `# Request` / `# CW` 和骨架选择流程。生成与导出仍使用当前变体的既有入口和授权范围。
 
 ## 一、三条不变式（核心心智模型）
 

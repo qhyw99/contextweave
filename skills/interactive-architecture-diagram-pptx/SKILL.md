@@ -2,7 +2,7 @@
 name: interactive-architecture-diagram-pptx
 slug: contextweave-interactive-architecture-pptx
 displayName: 架构图一键生成（PPTX 简化版）
-version: 1.5.0
+version: 1.6.0
 summary: 将架构、流程和长文本转换为结构图，默认且仅导出原生可编辑 PPTX
 license: MIT
 description: 使用 ContextWeave 生成或修改架构图、流程图、思维导图和复杂信息图，并以原生形状与连接器导出为可编辑 PPTX。适用于需要从代码、文件或自然语言中提取结构与关系并产出 PPTX 的请求。不适用于统计图表、手绘插画、像素级排版，或需要 SVG/HTML/CW 代码等其他导出格式的场景。
@@ -21,7 +21,7 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] } } }
 
 读取 [结构化调用与编辑](references/authoring.md)，再按当前结构只读取一份协议：[泳道 JSON](references/authoring-swimlane.md)、[层级卡片](references/authoring-cards.md)或[共享轨道矩阵](references/authoring-matrix.md)。新建泳道与共享轨道矩阵默认 JSON，层级卡片可用薄 HTML，已有 JSON 直接复用；每次只写一种输入。
 
-这条路径以 `--authoring_file` 取代普通流程的请求文件和 CW，直接表达内容、分组、顺序、真实关系、列数与跨度；不写 D2、宽高、坐标或 CSS。规范模型由脚本保存，后续编辑保留其 ID。仅普通路径遵循下文的 `# Request` / `# CW` 和骨架选择流程。生成与导出仍使用当前变体的既有入口和授权范围。
+这条路径以 `--authoring_file` 取代普通流程的请求文件和 CW，直接表达内容、分组、顺序、真实关系、必要的布局约束与跨度；不写 D2、宽高、坐标或 CSS。规范模型由脚本保存，后续编辑保留其 ID。 卡片内部列数优先交给自动 Grid；若无法可靠判断分组、主次或阅读顺序，先给出简短结构草案让用户确认，再提交。用户已明确或已确认的结构直接沿用，不要求逐一确认行列数字。仅普通路径遵循下文的 `# Request` / `# CW` 和骨架选择流程。生成与导出仍使用当前变体的既有入口和授权范围。
 
 ## 一、三条不变式（核心心智模型）
 
