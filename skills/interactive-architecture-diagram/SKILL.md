@@ -2,7 +2,7 @@
 name: interactive-architecture-diagram
 slug: contextweave-interactive-architecture
 displayName: 架构图一键生成
-version: 1.4.0
+version: 1.5.0
 summary: 以 JSON 或薄 HTML 稳定生成泳道、层级卡片和共享轨道矩阵，支持交互式结构图及原生可编辑 PPTX、Visio 导出
 license: MIT
 description: 使用 ContextWeave 生成或修改架构图、流程图、思维导图和复杂信息图。适用于需要从代码、文件或自然语言中提取结构与关系并实际产出 CW、SVG、HTML、可编辑 PPTX 或原生 VSDX 的请求；未特别说明时，PPTX 与 Visio 使用原生形状和连接器导出。不适用于统计图表、手绘插画或像素级排版。
@@ -189,7 +189,7 @@ node scripts/generate_contextweave.cjs --input_file "<绝对路径>" --output_na
 
 ### 3.4 整体配色：`base_palette`
 
-除单主色外，后端声明支持时可选择版本化方案：严格中央矩阵 `enterprise-central-v1`；联合生成 `red-gold-compact-v1` / `blue-compact-v1`。只传 `style_preset`，不混用 `primary`。选择参考案例后保留该参数及规范模型中的方案标识；不要每次修订重新决定配色。联合生成只为已有宏观区域标注 `style_role`，见构图规划；严格矩阵的固定槽位见矩阵协议。
+除单主色外，后端声明支持时可选择 `red-gold-compact-v1` / `blue-compact-v1`：用于联合生成的宏观区域，也用于 `shared-tracks` 矩阵的根、列、格及嵌套节点。通过 `style_role` 选择主题内角色，子项继承最近角色；列数、业务 ID 和分区由内容决定，主题不固定七列。只传 `style_preset`，不混用 `primary`，同会话续改继承保存的选择。矩阵先检查 `authoring` 下的主题/角色能力，详见矩阵协议；联合生成见构图规划。中车式结构是共享轨道的[普通示例](references/enterprise-central-example.md)，不选择案例专用预设。
 
 - “科技蓝”“暖色”“深色”等语义色调写入 `# Request`。
 - 用户给出 6 位 Hex、受支持色名（红/蓝/绿/橙/紫/金及对应英文）或风格预设（`corporate_red` / `corporate_blue` / `tech_blue`）时，组装为 `base_palette`，通过 `--base_palette` 传入。

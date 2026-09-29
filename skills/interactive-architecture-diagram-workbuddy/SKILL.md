@@ -2,7 +2,7 @@
 name: interactive-architecture-diagram-workbuddy
 slug: contextweave-interactive-architecture-workbuddy
 displayName: 架构图一键生成（Workbuddy）
-version: 1.4.0
+version: 1.5.0
 summary: 在 Workbuddy 中生成交互式结构图，支持结构化泳道、层级卡片、共享轨道矩阵与内联 SVG
 license: MIT
 description: 强大的AI自动化绘图与复杂信息可视化工具（基于 ContextWeave）。Workbuddy 增强版：支持生成并在对话框内直接展示内联 SVG 图形。通过深度的语义分析与请求编排，一键将晦涩文本与复杂知识转化为清晰直观的图形表达。
@@ -283,7 +283,7 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] } } }
 
 ### 版本化视觉方案
 
-后端能力支持时，严格中央矩阵选 `--base_palette '{"style_preset":"enterprise-central-v1"}'`，固定槽位与通栏 footer 见矩阵协议。联合生成可选 `red-gold-compact-v1` 或 `blue-compact-v1`，只给已有宏观区域标注 `style_role`，子项继承。不要混用 `primary`；选定方案和角色随会话保存，省略参数不降级为默认色卡。精确 JSON 写法沿用上例，只替换 style_preset 值。
+除单主色外，后端声明支持时可选择 `red-gold-compact-v1` / `blue-compact-v1`：用于联合生成的宏观区域，也用于 `shared-tracks` 矩阵的根、列、格及嵌套节点。通过 `style_role` 选择主题内角色，子项继承最近角色；列数、业务 ID 和分区由内容决定，主题不固定七列。只传 `style_preset`，不混用 `primary`，同会话续改继承保存的选择。矩阵先检查 `authoring` 下的主题/角色能力，详见矩阵协议；联合生成见构图规划。中车式结构是共享轨道的[普通示例](references/enterprise-central-example.md)，不选择案例专用预设。
 
 ### 联合生成协议
 

@@ -37,7 +37,7 @@ const COLOR_NAME_MAP = {
   "purple": "#6A1B9A",
 };
 
-const STYLE_PRESET_ENUM = ["corporate_red", "corporate_blue", "tech_blue", "enterprise-central-v1", "red-gold-compact-v1", "blue-compact-v1"];
+const STYLE_PRESET_ENUM = ["corporate_red", "corporate_blue", "tech_blue", "red-gold-compact-v1", "blue-compact-v1"];
 
 function invalidBasePalette(message) {
   return {
