@@ -34,7 +34,7 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"], "anyB
 
 先判断能否完整保留用户的内容和关系：顺序跨角色交接用泳道，分区嵌套用层级卡片，各列共享行与跨行用矩阵。适配时自动选用结构化路径，无需用户知道模板名称，也无需为此等待普通骨架选择；不适配时使用普通生成并显式传 `--diagram_type general`。
 
-读取 [结构化调用与编辑](references/authoring.md)，再按当前结构只读取一份协议：[泳道 JSON](references/authoring-swimlane.md)、[层级卡片](references/authoring-cards.md)或[共享轨道矩阵](references/authoring-matrix.md)。新建泳道默认 JSON，网格默认薄 HTML，已有 JSON 直接复用；每次只写一种输入。
+读取 [结构化调用与编辑](references/authoring.md)，再按当前结构只读取一份协议：[泳道 JSON](references/authoring-swimlane.md)、[层级卡片](references/authoring-cards.md)或[共享轨道矩阵](references/authoring-matrix.md)。新建泳道与共享轨道矩阵默认 JSON，层级卡片可用薄 HTML，已有 JSON 直接复用；每次只写一种输入。
 
 这条路径以 `--authoring_file` 取代普通流程的请求文件和 CW，直接表达内容、分组、顺序、真实关系、列数与跨度；不写 D2、宽高、坐标或 CSS。规范模型由脚本保存，后续编辑保留其 ID。仅普通路径遵循下文的 `# Request` / `# CW` 和骨架选择流程。生成与导出仍使用当前变体的既有入口和授权范围。
 
@@ -195,13 +195,13 @@ node scripts/contextweave_paid.mjs probe --input_file "<绝对路径>" --output_
 - 有推荐收益但尚无选择或布局授权：提出一次具体方案供用户选择；等待回复期间可整理材料和请求草稿，不能生成 `outline_file` 或提交依赖该选择的生成请求。沉默不视为接受。
 - 收益不明显、用户拒绝推荐或明确要求普通布局：沿用普通生成，不反复劝选。
 
-采用骨架后，在 `# Request` 写清所选区域安排及选择依据，按参考文档生成短小的 OutlineIntent JSON 文件，并附加：
+采用宏观方案后，按 [构图规划](references/layout-planning.md) 的版本能力选择 OutlineIntent。支持联合生成 v2 时，保留完整原文、用户硬要求、Agent 软建议和开放维度，交给后端联合细分整图；v1 只做既有语义兼容。将 JSON 保存到工作区，并附加：
 
 ```bash
 --outline_file "<工作区内的绝对路径>"
 ```
 
-普通容器分组、普通单轴流程无需默认附加骨架。节点多、文本长或内容复杂，以及阶段数量或系统边界本身，都不足以推荐或启用骨架。`OutlineIntent` 只声明顶层空间骨架和有原文证据的必要跨区关系，不描述最终节点图，也不暴露后端插件。
+普通容器分组、普通单轴流程无需默认附加骨架。节点多、文本长或内容复杂，以及阶段数量或系统边界本身，都不足以推荐或启用骨架。`OutlineIntent` 声明宏观意图和有原文证据的要求，不枚举最终节点图。v2 未展开关系允许后端按原文识别；v1 空账本禁止跨区关系，两者不能混用。未通过候选按版本和剩余预算修订，不能以新会话规避同一工作流的预算。
 
 ### 3.3 最少澄清问题
 
@@ -215,6 +215,8 @@ node scripts/contextweave_paid.mjs probe --input_file "<绝对路径>" --output_
 跳过用户已明确或已授权自主决定的事项。图类型、构图范式和配色已明确时，仍需完成骨架适配评估；没有值得推荐的骨架时直接继续。“你决定”按当前讨论事项理解，并在 `# Request` 中简述实际选择依据。
 
 ### 3.4 整体配色：`base_palette`
+
+除单主色外，后端声明支持时可选择版本化方案：严格中央矩阵 `enterprise-central-v1`；联合生成 `red-gold-compact-v1` / `blue-compact-v1`。只传 `style_preset`，不混用 `primary`。选择参考案例后保留该参数及规范模型中的方案标识；不要每次修订重新决定配色。联合生成只为已有宏观区域标注 `style_role`，见构图规划；严格矩阵的固定槽位见矩阵协议。
 
 - “科技蓝”“暖色”“深色”等语义色调写入 `# Request`。
 - 用户给出 6 位 Hex、受支持色名（红/蓝/绿/橙/紫/金及对应英文）或风格预设（`corporate_red` / `corporate_blue` / `tech_blue`）时，组装为 `base_palette`，通过 `--base_palette` 传入。
@@ -339,3 +341,8 @@ node scripts/contextweave_paid.mjs probe --input_file "<绝对路径>" --output_
 - **高度定制的统计图表**：复杂折线图、柱状图、散点图应使用专业数据分析工具。
 
 遇到超出能力边界的请求时，应直接说明限制，并在可能时建议更合适的工具类型。
+
+
+### 联合生成协议
+
+`--outline_file` 支持版本化宏观合同。后端声明联合生成 v2 时，按 [构图规划](references/layout-planning.md) 交接完整原文、硬要求、软建议和开放维度；客户端在提交前查询能力。失败候选不是成图，按返回 revision 与剩余预算处理；禁止通过降级 v1 或新建会话静默放宽原要求。编辑可通过生成命令携带 session_id、co_design_revision、co_design_edit_paths。

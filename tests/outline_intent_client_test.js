@@ -89,7 +89,7 @@ async function mainTest() {
 
   expectInvalid((outline) => { outline.unexpected = true; }, /unknown field/);
   expectInvalid((outline) => { outline.layout_policy.unexpected = true; }, /unknown field/);
-  expectInvalid((outline) => { outline.outline_intent_version = 2; }, /unsupported outline_intent_version/);
+  expectInvalid((outline) => { outline.outline_intent_version = 3; }, /unsupported outline_intent_version/);
   expectInvalid((outline) => { outline.content[0].item_name = "bad.id"; }, /safe ASCII identifier/);
   expectInvalid((outline) => { outline.content[1].item_name = "application"; }, /must be unique/);
   expectInvalid((outline) => { outline.content[1]["grid-rows"] = "[1]"; }, /must not overlap/);

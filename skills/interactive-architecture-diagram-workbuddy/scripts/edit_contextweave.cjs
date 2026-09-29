@@ -66,6 +66,12 @@ async function main(argv = process.argv.slice(2), Client = CWClient) {
     process.exit(1);
   }
 
+  let basePalette = null;
+  if (args["--base_palette"]) {
+    const validated = require("./generate_contextweave.cjs").validateBasePalette(args["--base_palette"]);
+    if (validated.error) { printJson(validated.error); process.exit(1); }
+    basePalette = validated.value;
+  }
   const client = new Client();
   // Legacy CW edits retain stage2 behavior; structured edits compile directly.
   const originalRequest = client.request.bind(client);
@@ -76,7 +82,7 @@ async function main(argv = process.argv.slice(2), Client = CWClient) {
     return originalRequest(endpoint, payload, options);
   };
 
-  const rawResult = await client.runGeneration({ inputFile, authoringFile, sessionId });
+  const rawResult = await client.runGeneration({ inputFile, authoringFile, sessionId, basePalette });
   const result = normalizeEditResult(authoringFile ? validateAuthoringResult(rawResult, "svg") : rawResult, Boolean(authoringFile));
   await saveAuthoringArtifacts(client, result, { outputName, outputDir, saveSource: true });
 

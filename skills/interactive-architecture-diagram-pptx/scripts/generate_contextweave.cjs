@@ -37,7 +37,7 @@ const COLOR_NAME_MAP = {
   "purple": "#6A1B9A",
 };
 
-const STYLE_PRESET_ENUM = ["corporate_red", "corporate_blue", "tech_blue"];
+const STYLE_PRESET_ENUM = ["corporate_red", "corporate_blue", "tech_blue", "enterprise-central-v1", "red-gold-compact-v1", "blue-compact-v1"];
 
 function invalidBasePalette(message) {
   return {
@@ -86,6 +86,7 @@ function validateBasePalette(raw) {
     result.style_preset = parsed.style_preset;
   }
 
+  if (result.primary && result.style_preset?.endsWith("-v1")) return { error: invalidBasePalette("版本化视觉方案已定义角色颜色，请省略 primary") };
   return { value: result };
 }
 
@@ -151,12 +152,12 @@ async function main(argv = process.argv.slice(2), Client = CWClient) {
   const n = parseInt(args["--n"] || "1", 10);
   const topK = parseInt(args["--top_k"] || "1", 10);
 
-  if (!userRequest && !inputFile && !authoringFile) {
+  if (!userRequest && !inputFile && !authoringFile && !outlineFile) {
     printJson({
       status: "error",
       error: {
         code: "MISSING_INPUT",
-        message: "必须提供 authoring_file、user_request 或 input_file",
+        message: "必须提供 authoring_file、outline_file、user_request 或 input_file",
         recoverable: true,
         recovery_hint: "补充生成请求文本或输入文件后重试",
       },
@@ -192,12 +193,27 @@ async function main(argv = process.argv.slice(2), Client = CWClient) {
     basePalette = validation.value;
   }
 
+  let coDesignRevision = null, coDesignEditPaths = null, coDesignUpstreamUsage = null;
+  try {
+    if (args["--co_design_revision"]) {
+      coDesignRevision = Number(args["--co_design_revision"]);
+      if (!Number.isSafeInteger(coDesignRevision) || coDesignRevision < 0) throw new Error("revision must be a nonnegative integer");
+    }
+    if (args["--co_design_edit_paths"]) coDesignEditPaths = JSON.parse(args["--co_design_edit_paths"]);
+    if (args["--co_design_upstream_usage"]) coDesignUpstreamUsage = JSON.parse(args["--co_design_upstream_usage"]);
+  } catch (error) {
+    printJson({status:"error",error:{code:"INVALID_CO_DESIGN_OPTIONS",message:String(error.message)}});
+    process.exit(1);
+  }
   const client = new Client();
   const rawResult = await client.runGeneration({
     userRequest,
     inputFile,
     enablePlan,
     outlineFile,
+    coDesignRevision,
+    coDesignEditPaths,
+    coDesignUpstreamUsage,
     diagramType,
     authoringFile,
     sessionId,

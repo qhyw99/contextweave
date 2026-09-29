@@ -1,4 +1,4 @@
-const { prepareAuthoring, saveExportedModel } = require("./authoring.cjs");
+const { prepareAuthoring, saveExportedModel, validatePresentation } = require("./authoring.cjs");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
@@ -63,6 +63,7 @@ function normalizedEvidence(value) {
 }
 
 function validateOutlineIntent(outline, userRequest) {
+  if (outline?.outline_intent_version === 2) return require("./co_design.cjs").validateCoDesign(outline);
   assertExactKeys(
     outline,
     ["outline_intent_version", "focus", "layout_policy", "edge_policy", "content", "global_relationships"],
@@ -582,7 +583,7 @@ class CWClient {
           "INVALID_OUTLINE_INTENT",
           String(error.message || error),
           true,
-          "修正薄 OutlineIntent v1 后重试；不要把完整最终图或本地路径写入该文件"
+          "按声明的 OutlineIntent 版本修正后重试；v2 保留完整原文，勿传本地路径作为来源"
         ),
       };
     }
@@ -755,7 +756,7 @@ class CWClient {
     }
   }
 
-  async runGeneration({ userRequest, diagramType = null, authoringFile = null, inputFile = null, outlineFile = null, sessionId = null, inputSequence = null, validateRequestLength = false, diagramStyle = null, morphology = null, accentTargets = null, basePalette = null, enablePlan = false, n = 1, topK = 1 }) {
+  async runGeneration({ userRequest, diagramType = null, authoringFile = null, inputFile = null, outlineFile = null, coDesignRevision = null, coDesignEditPaths = null, coDesignUpstreamUsage = null, sessionId = null, inputSequence = null, validateRequestLength = false, diagramStyle = null, morphology = null, accentTargets = null, basePalette = null, enablePlan = false, n = 1, topK = 1 }) {
     const payload = {
       input_sequence: inputSequence,
       export_svg: true,
@@ -857,7 +858,7 @@ class CWClient {
       payload.user_request = userRequest;
     }
 
-    if (validateRequestLength) {
+    if (validateRequestLength && !outlineFile) {
       const minLength = parseInt(process.env.CONTEXTWEAVE_MIN_REQUEST_LENGTH || "50", 10);
       const maxLength = parseInt(process.env.CONTEXTWEAVE_MAX_REQUEST_LENGTH || "5000", 10);
       const reqLength = payload.user_request ? payload.user_request.length : 0;
@@ -876,10 +877,38 @@ class CWClient {
       if (outlineResult.error) {
         return outlineResult.error;
       }
+      if (outlineResult.value.outline_intent_version === 2) {
+        const capabilities = await this.getCapabilities();
+        if (capabilities?.status === "error") return capabilities;
+        if (!capabilities?.co_design?.versions?.includes(2) || capabilities.co_design.execution !== "joint") {
+          return this.error("CO_DESIGN_UNSUPPORTED", "后端未声明联合生成 v2 能力；请升级后端，不自动降级 v1");
+        }
+        const presentationError = validatePresentation(capabilities, basePalette, "co_design");
+        if (presentationError) return presentationError;
+        const roles = (outlineResult.value.regions || []).filter(r => r.style_role);
+        if (roles.some(r => !capabilities.co_design.style_roles?.includes(r.style_role))) return this.error("PRESENTATION_UNSUPPORTED", "后端未声明所用 style_role 能力");
+        if (roles.length && !basePalette?.style_preset && !sessionId) return this.error("PRESENTATION_REQUIRED", "style_role 需要同时选择版本化 base_palette.style_preset");
+        const dimensions = capabilities.co_design.hard_dimensions;
+        const unsupported = (outlineResult.value.requirements || []).filter(rule =>
+          Array.isArray(dimensions) ? !dimensions.includes(rule.kind) : rule.kind === "track_span");
+        if (unsupported.length) {
+          return this.error("CO_DESIGN_UNSUPPORTED", `后端未声明这些规则能力：${[...new Set(unsupported.map(rule => rule.kind))].join(", ")}`);
+        }
+      }
       payload.outline_intent = outlineResult.value;
       payload.outline_intent_version = outlineResult.value.outline_intent_version;
     }
 
+    if (!outlineFile && basePalette?.style_preset?.endsWith("-v1")) {
+      const capabilities = await this.getCapabilities();
+      if (capabilities?.status === "error") return capabilities;
+      const error = validatePresentation(capabilities, basePalette, "co_design");
+      if (error) return error;
+      if (!sessionId) return this.error("PRESENTATION_REQUIRED", "联合生成视觉方案需要 outline_file 中的宏观区域 style_role");
+    }
+    if (coDesignRevision !== null) payload.co_design_revision = coDesignRevision;
+    if (coDesignEditPaths !== null) payload.co_design_edit_paths = coDesignEditPaths;
+    if (coDesignUpstreamUsage !== null) payload.co_design_upstream_usage = coDesignUpstreamUsage;
     const result = await this.request("/run", payload);
     // 打印服务端透传的 lint 软警告（仅提示，不影响成功判定与返回值）
     if (result && Array.isArray(result.warnings) && result.warnings.length > 0) {

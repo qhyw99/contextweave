@@ -27,7 +27,7 @@ const synchronizedFiles = [
 for (const relativePath of synchronizedFiles) {
   const freeContent = fs.readFileSync(path.join(freeRoot, relativePath), "utf8");
   const paidContent = fs.readFileSync(path.join(paidRoot, relativePath), "utf8");
-  assert.equal(paidContent, freeContent, `${relativePath} must remain synchronized`);
+  assert.equal(paidContent.replace(/\r\n/g, "\n"), freeContent.replace(/\r\n/g, "\n"), `${relativePath} must remain synchronized`);
 }
 
 const freeFiles = [

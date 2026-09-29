@@ -7,6 +7,29 @@ function failure(code, message) {
   return { status: "error", error: { code, message, recoverable: true } };
 }
 
+function validatePresentation(capabilities, palette, route, document) {
+  const embedded = document?.presentation_preset;
+  const name = palette?.style_preset || embedded;
+  if (embedded && palette?.style_preset && embedded !== palette.style_preset) return failure("PRESENTATION_CONFLICT", "正文与请求选定的视觉方案不一致");
+  if (!name || ["corporate_red", "corporate_blue", "tech_blue"].includes(name)) return null;
+  const recipe = capabilities?.[route]?.presentation_presets?.[name];
+  if (!recipe) return failure("PRESENTATION_UNSUPPORTED", `后端未声明 ${route} 的视觉方案 ${name}；不降级默认配色`);
+  if (palette?.primary) return failure("PRESENTATION_CONFLICT", "版本化视觉方案已定义角色颜色，请省略 primary");
+  if (embedded && embedded !== name) return failure("PRESENTATION_CONFLICT", "正文与请求选定的视觉方案不一致");
+  if (route === "authoring" && document && typeof document === "object") {
+    if (document.template && document.template !== recipe.template) return failure("PRESENTATION_CONFLICT", `所选方案要求 template=${recipe.template}`);
+    if (recipe.columns && (!Array.isArray(document.columns) || JSON.stringify(document.columns.map(c => c?.id)) !== JSON.stringify(recipe.columns))) {
+      return failure("PRESENTATION_SLOTS", `保留列槽位 ${recipe.columns.join(", ")}；保障内容放在 footer，不能新增第八列`);
+    }
+    if (recipe.footer_required && (typeof document.footer !== "string" || !document.footer.trim())) return failure("PRESENTATION_SLOTS", "所选方案要求完整通栏 footer");
+    const core = document.columns?.find(c => c?.id === "core");
+    if (recipe.core_cells && (!Array.isArray(core?.cells) || JSON.stringify(core.cells.slice(0, recipe.core_cells.length).map(c => c?.id)) !== JSON.stringify(recipe.core_cells))) {
+      return failure("PRESENTATION_SLOTS", "core 的前两格保留 foundation、planning ID");
+    }
+  }
+  return null;
+}
+
 function validateAuthoringArgs(args) {
   if (!args["--authoring_file"]) return null;
   const conflicts = ["--user_request", "-u", "--input_file", "-i", "--outline_file", "--input_sequence", "--diagram_style", "-d", "--morphology", "-m", "--diagram_type", "--accent_targets"];
@@ -55,6 +78,8 @@ async function prepareAuthoring(client, options, payload) {
       || !["swimlane", "cards", "matrix"].every(kind => supported?.kinds?.includes(kind))) {
     return failure("AUTHORING_UNSUPPORTED", "后端未声明兼容的结构化绘图 v1 能力；升级后端后重试，不自动切换模型生成");
   }
+  const presentationError = validatePresentation(capabilities, payload.base_palette, "authoring", authoring.format === "json" ? authoring.source : null);
+  if (presentationError) return presentationError;
   payload.authoring = authoring;
   payload.include_source = false;
   delete payload.input_sequence;
@@ -104,4 +129,4 @@ function saveExportedModel(result, directory) {
   return { saved_authoring_file: filename };
 }
 
-module.exports = { MAX_AUTHORING_BYTES, validateAuthoringArgs, readAuthoringFile, prepareAuthoring, validateAuthoringResult, saveAuthoringArtifacts, saveExportedModel };
+module.exports = { MAX_AUTHORING_BYTES, validatePresentation, validateAuthoringArgs, readAuthoringFile, prepareAuthoring, validateAuthoringResult, saveAuthoringArtifacts, saveExportedModel };

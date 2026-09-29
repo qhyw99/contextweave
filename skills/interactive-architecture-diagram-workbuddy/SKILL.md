@@ -2,7 +2,7 @@
 name: interactive-architecture-diagram-workbuddy
 slug: contextweave-interactive-architecture-workbuddy
 displayName: 架构图一键生成（Workbuddy）
-version: 1.3.0
+version: 1.4.0
 summary: 在 Workbuddy 中生成交互式结构图，支持结构化泳道、层级卡片、共享轨道矩阵与内联 SVG
 license: MIT
 description: 强大的AI自动化绘图与复杂信息可视化工具（基于 ContextWeave）。Workbuddy 增强版：支持生成并在对话框内直接展示内联 SVG 图形。通过深度的语义分析与请求编排，一键将晦涩文本与复杂知识转化为清晰直观的图形表达。
@@ -17,7 +17,7 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] } } }
 
 先判断能否完整保留用户的内容和关系：顺序跨角色交接用泳道，分区嵌套用层级卡片，各列共享行与跨行用矩阵。适配时自动选用结构化路径，无需用户知道模板名称，也无需为此等待普通骨架选择；不适配时使用普通生成并显式传 `--diagram_type general`。
 
-读取 [结构化调用与编辑](references/authoring.md)，再按当前结构只读取一份协议：[泳道 JSON](references/authoring-swimlane.md)、[层级卡片](references/authoring-cards.md)或[共享轨道矩阵](references/authoring-matrix.md)。新建泳道默认 JSON，网格默认薄 HTML，已有 JSON 直接复用；每次只写一种输入。
+读取 [结构化调用与编辑](references/authoring.md)，再按当前结构只读取一份协议：[泳道 JSON](references/authoring-swimlane.md)、[层级卡片](references/authoring-cards.md)或[共享轨道矩阵](references/authoring-matrix.md)。新建泳道与共享轨道矩阵默认 JSON，层级卡片可用薄 HTML，已有 JSON 直接复用；每次只写一种输入。
 
 这条路径以 `--authoring_file` 取代普通流程的请求文件和 CW，直接表达内容、分组、顺序、真实关系、列数与跨度；不写 D2、宽高、坐标或 CSS。规范模型由脚本保存，后续编辑保留其 ID。仅普通路径遵循下文的 `# Request` / `# CW` 和骨架选择流程。生成与导出仍使用当前变体的既有入口和授权范围。
 
@@ -279,3 +279,12 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] } } }
 - 在 `scenarios: {}` 块中，针对每个独立链路定义一个子块（如 `QueryFlow: {}`）。
 - 在场景子块中，通过修改无关组件的透明度（如 `style.opacity: 0.2`）进行淡化，并通过修改目标链路的连线样式（如 `stroke: red, stroke-width: 4`）进行高亮。
 - 场景定义完成后，可以告知用户后续可通过指定 ScenarioName 提取特定视图。
+
+
+### 版本化视觉方案
+
+后端能力支持时，严格中央矩阵选 `--base_palette '{"style_preset":"enterprise-central-v1"}'`，固定槽位与通栏 footer 见矩阵协议。联合生成可选 `red-gold-compact-v1` 或 `blue-compact-v1`，只给已有宏观区域标注 `style_role`，子项继承。不要混用 `primary`；选定方案和角色随会话保存，省略参数不降级为默认色卡。精确 JSON 写法沿用上例，只替换 style_preset 值。
+
+### 联合生成协议
+
+`--outline_file` 支持版本化宏观合同。后端声明联合生成 v2 时，按 [构图规划](references/layout-planning.md) 交接完整原文、硬要求、软建议和开放维度；客户端在提交前查询能力。失败候选不是成图，按返回 revision 与剩余预算处理；禁止通过降级 v1 或新建会话静默放宽原要求。编辑可通过生成命令携带 session_id、co_design_revision、co_design_edit_paths。

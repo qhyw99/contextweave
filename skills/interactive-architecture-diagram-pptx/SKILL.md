@@ -2,7 +2,7 @@
 name: interactive-architecture-diagram-pptx
 slug: contextweave-interactive-architecture-pptx
 displayName: 架构图一键生成（PPTX 简化版）
-version: 1.0.0
+version: 1.4.0
 summary: 将架构、流程和长文本转换为结构图，默认且仅导出原生可编辑 PPTX
 license: MIT
 description: 使用 ContextWeave 生成或修改架构图、流程图、思维导图和复杂信息图，并以原生形状与连接器导出为可编辑 PPTX。适用于需要从代码、文件或自然语言中提取结构与关系并产出 PPTX 的请求。不适用于统计图表、手绘插画、像素级排版，或需要 SVG/HTML/CW 代码等其他导出格式的场景。
@@ -19,7 +19,7 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] } } }
 
 先判断能否完整保留用户的内容和关系：顺序跨角色交接用泳道，分区嵌套用层级卡片，各列共享行与跨行用矩阵。适配时自动选用结构化路径，无需用户知道模板名称，也无需为此等待普通骨架选择；不适配时使用普通生成并显式传 `--diagram_type general`。
 
-读取 [结构化调用与编辑](references/authoring.md)，再按当前结构只读取一份协议：[泳道 JSON](references/authoring-swimlane.md)、[层级卡片](references/authoring-cards.md)或[共享轨道矩阵](references/authoring-matrix.md)。新建泳道默认 JSON，网格默认薄 HTML，已有 JSON 直接复用；每次只写一种输入。
+读取 [结构化调用与编辑](references/authoring.md)，再按当前结构只读取一份协议：[泳道 JSON](references/authoring-swimlane.md)、[层级卡片](references/authoring-cards.md)或[共享轨道矩阵](references/authoring-matrix.md)。新建泳道与共享轨道矩阵默认 JSON，层级卡片可用薄 HTML，已有 JSON 直接复用；每次只写一种输入。
 
 这条路径以 `--authoring_file` 取代普通流程的请求文件和 CW，直接表达内容、分组、顺序、真实关系、列数与跨度；不写 D2、宽高、坐标或 CSS。规范模型由脚本保存，后续编辑保留其 ID。仅普通路径遵循下文的 `# Request` / `# CW` 和骨架选择流程。生成与导出仍使用当前变体的既有入口和授权范围。
 
@@ -167,6 +167,8 @@ node scripts/edit_contextweave.cjs --session_id "<session_id>" --input_file "<�
 
 ### 3.4 整体配色：`base_palette`
 
+除单主色外，后端声明支持时可选择版本化方案：严格中央矩阵 `enterprise-central-v1`；联合生成 `red-gold-compact-v1` / `blue-compact-v1`。只传 `style_preset`，不混用 `primary`。选择参考案例后保留该参数及规范模型中的方案标识；不要每次修订重新决定配色。联合生成只为已有宏观区域标注 `style_role`，见构图规划；严格矩阵的固定槽位见矩阵协议。
+
 - “科技蓝”“暖色”“深色”等语义色调写入 `# Request`。
 - 用户给出 6 位 Hex、受支持色名（红/蓝/绿/橙/紫/金及对应英文）或风格预设（`corporate_red` / `corporate_blue` / `tech_blue`）时，组装为 `base_palette`，通过 `--base_palette` 传入。
 - Hex 色值只能出现在 `base_palette` 或 `accent_targets` 中，不能写入 `# Request` 或其他自由文本参数。
@@ -266,3 +268,8 @@ node "<当前 Skill 根目录>/scripts/update_skill.cjs" --dry-run
 - [ ] 已简要说明本任务的外发数据类别与用途并获得授权；新增敏感类别时已补充确认。
 - [ ] 已真正落盘并执行脚本，最终回复是合法的单个 JSON 对象。
 - [ ] 交付产物仅为 PPTX 文件，未提供 SVG、HTML 或 CW 代码。
+
+
+### 联合生成协议
+
+`--outline_file` 支持版本化宏观合同。后端声明联合生成 v2 时，按 [构图规划](references/layout-planning.md) 交接完整原文、硬要求、软建议和开放维度；客户端在提交前查询能力。失败候选不是成图，按返回 revision 与剩余预算处理；禁止通过降级 v1 或新建会话静默放宽原要求。编辑可通过生成命令携带 session_id、co_design_revision、co_design_edit_paths。

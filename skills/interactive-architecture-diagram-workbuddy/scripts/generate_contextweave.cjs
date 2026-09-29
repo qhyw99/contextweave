@@ -20,6 +20,76 @@ function parseArgs(argv) {
   return args;
 }
 
+const COLOR_NAME_MAP = {
+  "红": "#C00000",
+  "正红": "#C00000",
+  "蓝": "#1F6FB4",
+  "科技蓝": "#1F6FB4",
+  "绿": "#2E7D32",
+  "橙": "#E65100",
+  "暖橙": "#E65100",
+  "紫": "#6A1B9A",
+  "金": "#B8860B",
+  "red": "#C00000",
+  "blue": "#1F6FB4",
+  "green": "#2E7D32",
+  "orange": "#E65100",
+  "purple": "#6A1B9A",
+};
+
+const STYLE_PRESET_ENUM = ["corporate_red", "corporate_blue", "tech_blue", "enterprise-central-v1", "red-gold-compact-v1", "blue-compact-v1"];
+
+function invalidBasePalette(message) {
+  return {
+    status: "error",
+    error: {
+      code: "INVALID_BASE_PALETTE",
+      message,
+      recoverable: true,
+      recovery_hint: "按 JSON 对象格式传参后重试，如 {\"primary\":\"#C00000\",\"style_preset\":\"corporate_red\"}；primary 支持 6 位 Hex 或常见色名（红/蓝/绿/橙/紫/金/red/blue/green/orange/purple），style_preset 枚举为 corporate_red / corporate_blue / tech_blue",
+    },
+  };
+}
+
+function validateBasePalette(raw) {
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    return { error: invalidBasePalette("base_palette 必须是合法 JSON") };
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return { error: invalidBasePalette("base_palette 必须是 JSON 对象") };
+  }
+
+  const result = {};
+  if (parsed.primary !== undefined && parsed.primary !== null) {
+    if (typeof parsed.primary !== "string") {
+      return { error: invalidBasePalette("base_palette.primary 必须是字符串") };
+    }
+    const primary = parsed.primary.trim();
+    if (/^#[0-9a-fA-F]{6}$/.test(primary)) {
+      result.primary = primary;
+    } else if (/^#[0-9a-fA-F]{8}$/.test(primary) || /^rgba\s*\(/i.test(primary)) {
+      return { error: invalidBasePalette(`base_palette.primary 不支持 8 位 Hex 或 rgba 形式：${primary}`) };
+    } else if (COLOR_NAME_MAP[primary]) {
+      result.primary = COLOR_NAME_MAP[primary];
+    } else {
+      return { error: invalidBasePalette(`无法识别的 base_palette.primary：${primary}`) };
+    }
+  }
+
+  if (parsed.style_preset !== undefined && parsed.style_preset !== null) {
+    if (typeof parsed.style_preset !== "string" || !STYLE_PRESET_ENUM.includes(parsed.style_preset)) {
+      return { error: invalidBasePalette(`base_palette.style_preset 必须在枚举 [${STYLE_PRESET_ENUM.join(", ")}] 内`) };
+    }
+    result.style_preset = parsed.style_preset;
+  }
+
+  if (result.primary && result.style_preset?.endsWith("-v1")) return { error: invalidBasePalette("版本化视觉方案已定义角色颜色，请省略 primary") };
+  return { value: result };
+}
+
 function normalizeGenerationResult(result) {
   if (result.status === "ok" && Array.isArray(result.choices)) {
     result.choices = result.choices.map(choice => {
@@ -83,12 +153,12 @@ async function main(argv = process.argv.slice(2), Client = CWClient) {
   const n = parseInt(args["--n"] || "1", 10);
   const topK = parseInt(args["--top_k"] || "1", 10);
 
-  if (!userRequest && !inputFile && !authoringFile) {
+  if (!userRequest && !inputFile && !authoringFile && !outlineFile) {
     printJson({
       status: "error",
       error: {
         code: "MISSING_INPUT",
-        message: "必须提供 authoring_file、user_request 或 input_file",
+        message: "必须提供 authoring_file、outline_file、user_request 或 input_file",
         recoverable: true,
         recovery_hint: "补充生成请求文本或输入文件后重试",
       },
@@ -114,18 +184,40 @@ async function main(argv = process.argv.slice(2), Client = CWClient) {
     }
   }
 
+  let coDesignRevision = null, coDesignEditPaths = null, coDesignUpstreamUsage = null;
+  try {
+    if (args["--co_design_revision"]) {
+      coDesignRevision = Number(args["--co_design_revision"]);
+      if (!Number.isSafeInteger(coDesignRevision) || coDesignRevision < 0) throw new Error("revision must be a nonnegative integer");
+    }
+    if (args["--co_design_edit_paths"]) coDesignEditPaths = JSON.parse(args["--co_design_edit_paths"]);
+    if (args["--co_design_upstream_usage"]) coDesignUpstreamUsage = JSON.parse(args["--co_design_upstream_usage"]);
+  } catch (error) {
+    printJson({status:"error",error:{code:"INVALID_CO_DESIGN_OPTIONS",message:String(error.message)}});
+    process.exit(1);
+  }
+  let basePalette = null;
+  if (args["--base_palette"]) {
+    const validated = validateBasePalette(args["--base_palette"]);
+    if (validated.error) { printJson(validated.error); process.exit(1); }
+    basePalette = validated.value;
+  }
   const client = new Client();
   const rawResult = await client.runGeneration({
     userRequest,
     inputFile,
     enablePlan,
     outlineFile,
+    coDesignRevision,
+    coDesignEditPaths,
+    coDesignUpstreamUsage,
     diagramType,
     authoringFile,
     sessionId,
     inputSequence,
     validateRequestLength: true,
     diagramStyle,
+    basePalette,
     n,
     topK,
   });
@@ -227,5 +319,5 @@ async function main(argv = process.argv.slice(2), Client = CWClient) {
   }
 }
 
-module.exports = { main };
+module.exports = { validateBasePalette, COLOR_NAME_MAP, STYLE_PRESET_ENUM, main };
 if (require.main === module) main();
