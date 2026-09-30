@@ -279,3 +279,6 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] } } }
 - 在 `scenarios: {}` 块中，针对每个独立链路定义一个子块（如 `QueryFlow: {}`）。
 - 在场景子块中，通过修改无关组件的透明度（如 `style.opacity: 0.2`）进行淡化，并通过修改目标链路的连线样式（如 `stroke: red, stroke-width: 4`）进行高亮。
 - 场景定义完成后，可以告知用户后续可通过指定 ScenarioName 提取特定视图。
+
+
+请求失败、断网或需要找回结果时，读取 [请求记录与结果找回](references/request-recovery.md)。生成脚本会保存本地回执，先查询原请求，再决定是否新建请求。

@@ -199,6 +199,11 @@ class CWClient {
   }
 
   async request(endpoint, payload) {
+    return require("./request_receipt.cjs").withRequestReceipt(this, endpoint,
+      (headers) => this.requestWithHeaders(endpoint, payload, headers));
+  }
+
+  async requestWithHeaders(endpoint, payload, requestHeaders) {
     const baseUrlError = this.validateBaseUrl();
     if (baseUrlError) {
       return baseUrlError;
@@ -209,7 +214,10 @@ class CWClient {
     }
 
     try {
-      const response = await this.postJson(`${this.baseUrl}${endpoint}`, body);
+      const response = await this.postJson(`${this.baseUrl}${endpoint}`, body, requestHeaders);
+      let receiptPayload;
+      try { receiptPayload = JSON.parse(response.body || "{}"); } catch (_) {}
+      if (receiptPayload && receiptPayload.receipt) return receiptPayload;
       if (response.statusCode === 402) {
         return this.error("PAYMENT_REQUIRED", "Insufficient credits", true, "额度不足。可引导用户免费领取：询问用户邮箱 → 运行 request_quota_code.cjs --email <邮箱> 发送验证码 → 询问验证码 → 运行 redeem_quota_code.cjs --email <邮箱> --code <验证码> → 用户查收邮件按指引配置 CONTEXTWEAVE_MCP_API_KEY 后重试。");
       }
@@ -268,12 +276,12 @@ class CWClient {
     }
   }
 
-  async postJson(urlString, body) {
+  async postJson(urlString, body, requestHeaders = null) {
     const requestData = JSON.stringify(body);
     const requestOptions = {
       method: "POST",
       headers: {
-        ...this.headers(),
+        ...(requestHeaders || this.headers()),
         "Content-Length": Buffer.byteLength(requestData),
       },
     };
@@ -293,6 +301,24 @@ class CWClient {
       }
       throw error;
     }
+  }
+
+  handleResponse(response) {
+    try {
+      const result = JSON.parse(response.body || "{}");
+      if (result.receipt || (response.statusCode >= 200 && response.statusCode < 300)) return result;
+      return this.error("API_ERROR", JSON.stringify(result.detail || result.error || "Request failed"));
+    } catch (error) { return this.error("API_ERROR", "无法读取服务端响应"); }
+  }
+
+  async getRequestReceipt({ requestId = null, token = null } = {}) {
+    const invalid = this.validateBaseUrl();
+    if (invalid) return invalid;
+    const route = requestId ? `/requests/by-request/${encodeURIComponent(requestId)}` : "/requests";
+    const headers = this.headers();
+    if (token) headers["X-Receipt-Token"] = token;
+    const response = await makeRequest(`${this.baseUrl}${route}`, { method: "GET", headers }, null, 30000);
+    return this.handleResponse({ statusCode: response.statusCode, statusMessage: response.statusMessage, body: await readBody(response) });
   }
 
   async getCapabilities() {
