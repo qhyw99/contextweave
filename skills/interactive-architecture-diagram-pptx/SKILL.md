@@ -2,7 +2,7 @@
 name: interactive-architecture-diagram-pptx
 slug: contextweave-interactive-architecture-pptx
 displayName: 架构图一键生成（PPTX 简化版）
-version: 1.6.0
+version: 1.6.1
 summary: 将架构、流程和长文本转换为结构图，默认且仅导出原生可编辑 PPTX
 license: MIT
 description: 使用 ContextWeave 生成或修改架构图、流程图、思维导图和复杂信息图，并以原生形状与连接器导出为可编辑 PPTX。适用于需要从代码、文件或自然语言中提取结构与关系并产出 PPTX 的请求。不适用于统计图表、手绘插画、像素级排版，或需要 SVG/HTML/CW 代码等其他导出格式的场景。
@@ -273,3 +273,6 @@ node "<当前 Skill 根目录>/scripts/update_skill.cjs" --dry-run
 ### 联合生成协议
 
 `--outline_file` 支持版本化宏观合同。后端声明联合生成 v2 时，按 [构图规划](references/layout-planning.md) 交接完整原文、硬要求、软建议和开放维度；客户端在提交前查询能力。失败候选不是成图，按返回 revision 与剩余预算处理；禁止通过降级 v1 或新建会话静默放宽原要求。编辑可通过生成命令携带 session_id、co_design_revision、co_design_edit_paths。
+
+
+请求失败、断网或需要找回结果时，读取 [请求记录与结果找回](references/request-recovery.md)。生成脚本会保存本地回执，先查询原请求，再决定是否新建请求。
