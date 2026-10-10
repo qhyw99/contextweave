@@ -2,7 +2,7 @@
 name: interactive-architecture-diagram-pay
 slug: contextweave-interactive-architecture-pay
 displayName: 架构图一键生成（支付宝付费版）
-version: 1.0.0
+version: 1.1.0
 summary: 通过支付宝 A2M 按次付费，将架构、流程和长文本转换为交互式结构图
 license: MIT
 description: 使用 ContextWeave 生成或修改架构图、流程图、思维导图和复杂信息图，并通过支付宝 AI 按量付费（A2M / HTTP 402）完成单次调用支付。适用于需要从代码、文件或自然语言中提取结构与关系并实际产出 CW、SVG、HTML 或可编辑 PPTX 的付费绘图请求；未特别说明时，PPTX 使用原生形状与连接器导出。不适用于统计图表、手绘插画或像素级排版。
@@ -14,6 +14,12 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"], "anyB
 本 Skill 是 ContextWeave 的付费绘图请求客户端：把用户需求整理成自包含的绘图意图，通过本地脚本、ContextWeave 云端后端与支付宝官方支付组件协同生成结果。绘图会话由后端托管；支付账单与履约状态只在当前工作区的受保护状态目录中短期保存。
 
 常见触发语包括：“画图”“画个架构图”“生成流程图”“画个思维导图”“生成 CW 图”“可视化这段代码”。
+
+## 配色选择与提交前核对
+
+整体颜色、语义色调和复合主题先整理为 base_palette；正文可保留意图说明，执行选择不能只留在正文。普通新建有颜色要求或自主选择主题时传色板，无偏好时显式 --use_default_palette；已有图继承，不重新选默认。只有局部高亮时整体默认选择可与 accent_targets 同用。
+
+通用双色／背景使用 version:1 的 primary、secondary、background，先核对 /capabilities.co_design.palette 的版本、字段和入口；不支持时不能丢字段绕过。authoring 使用自身模型／预设能力。逐项核对配色要求已进入执行参数，避免遗漏第二色或深色背景。参数及例子见[结构化配色交接](references/palette.md)。
 
 ## 零、Pay Skill 支付模型
 

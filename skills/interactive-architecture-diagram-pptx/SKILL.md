@@ -2,7 +2,7 @@
 name: interactive-architecture-diagram-pptx
 slug: contextweave-interactive-architecture-pptx
 displayName: 架构图一键生成（PPTX 简化版）
-version: 1.6.1
+version: 1.7.0
 summary: 将架构、流程和长文本转换为结构图，默认且仅导出原生可编辑 PPTX
 license: MIT
 description: 使用 ContextWeave 生成或修改架构图、流程图、思维导图和复杂信息图，并以原生形状与连接器导出为可编辑 PPTX。适用于需要从代码、文件或自然语言中提取结构与关系并产出 PPTX 的请求。不适用于统计图表、手绘插画、像素级排版，或需要 SVG/HTML/CW 代码等其他导出格式的场景。
@@ -96,7 +96,7 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] } } }
 本任务首次联网前，简要说明接收方（ContextWeave 官方服务）、用途（生成/修改图并导出 PPTX）及涉及的数据类别（请求文本、必要时附带的旧图 CW 文本），取得一次明确同意。同一任务内未新增敏感数据类别时不重复询问。
 
 ```bash
-node scripts/generate_contextweave.cjs --input_file "<绝对路径>" --output_name "<语义化英文名>" --output_dir "docs/diagrams"
+node scripts/generate_contextweave.cjs --input_file "<绝对路径>" --output_name "<语义化英文名>" --output_dir "docs/diagrams" --use_default_palette
 ```
 
 - `input_file` 必须存在且为绝对路径。
@@ -169,7 +169,8 @@ node scripts/edit_contextweave.cjs --session_id "<session_id>" --input_file "<�
 
 除单主色外，后端声明支持时可选择 `red-gold-compact-v1` / `blue-compact-v1`：用于联合生成的宏观区域，也用于 `shared-tracks` 矩阵的根、列、格及嵌套节点。通过 `style_role` 选择主题内角色，子项继承最近角色；列数、业务 ID 和分区由内容决定，主题不固定七列。只传 `style_preset`，不混用 `primary`，同会话续改继承保存的选择。矩阵先检查 `authoring` 下的主题/角色能力，详见矩阵协议；联合生成见构图规划。中车式结构是共享轨道的[普通示例](references/enterprise-central-example.md)，不选择案例专用预设。
 
-- “科技蓝”“暖色”“深色”等语义色调写入 `# Request`。
+- 整体颜色、语义色调和复合主题在提交前整理为 `base_palette`；正文可保留意图说明，执行选择不能只留在正文。通用双色／背景通过 `version:1` 的 `primary`、`secondary`、`background` 传递，先核对入口能力；详见[结构化配色交接](references/palette.md)。
+- 新建普通图未指定整体配色时，显式传 `--use_default_palette`；已有图沿用保存色板，不重新选默认。只有局部高亮时，默认整体选择可与 `accent_targets` 同用。
 - 用户给出 6 位 Hex、受支持色名（红/蓝/绿/橙/紫/金及对应英文）或风格预设（`corporate_red` / `corporate_blue` / `tech_blue`）时，组装为 `base_palette`，通过 `--base_palette` 传入。
 - Hex 色值只能出现在 `base_palette` 或 `accent_targets` 中，不能写入 `# Request` 或其他自由文本参数。
 
@@ -264,7 +265,7 @@ node "<当前 Skill 根目录>/scripts/update_skill.cjs" --dry-run
 - [ ] 每条关键关系都能复述成明确语句。
 - [ ] 图只回答一个核心问题；需要拆分时已给出方案并获得确认。
 - [ ] 普通路径的 `--diagram_style` 与 `--morphology` 已按用户意图显式设置；结构化路径只提交 authoring。
-- [ ] 精确主色和高亮色只通过 `base_palette` / `accent_targets` 传递。
+- [ ] 配色要求已对应到实际整体参数或高亮对象；普通新建明确选择色板或默认，复合主题不丢第二色／背景，已有图继承。
 - [ ] 已简要说明本任务的外发数据类别与用途并获得授权；新增敏感类别时已补充确认。
 - [ ] 已真正落盘并执行脚本，最终回复是合法的单个 JSON 对象。
 - [ ] 交付产物仅为 PPTX 文件，未提供 SVG、HTML 或 CW 代码。

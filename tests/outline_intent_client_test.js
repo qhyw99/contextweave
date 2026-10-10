@@ -1,3 +1,4 @@
+const { explicitDefaultFixture } = require("./palette_fixture.cjs");
 const assert = require("assert");
 const fs = require("fs");
 const os = require("os");
@@ -115,7 +116,7 @@ async function mainTest() {
     fs.writeFileSync(outlinePath, JSON.stringify(validOutline()), "utf8");
     await testCliPassesOutlineFile(outlinePath);
 
-    const client = new CWClient();
+    const client = explicitDefaultFixture(new CWClient());
     let capturedPayload;
     client.request = async (endpoint, payload) => {
       assert.strictEqual(endpoint, "/run");
@@ -168,7 +169,7 @@ async function mainTest() {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
 
-  const client = new CWClient();
+  const client = explicitDefaultFixture(new CWClient());
   for (const statusCode of [400, 409, 422]) {
     const response = client.handleResponse({
       statusCode,

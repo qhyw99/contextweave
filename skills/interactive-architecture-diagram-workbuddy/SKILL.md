@@ -2,7 +2,7 @@
 name: interactive-architecture-diagram-workbuddy
 slug: contextweave-interactive-architecture-workbuddy
 displayName: 架构图一键生成（Workbuddy）
-version: 1.6.1
+version: 1.7.0
 summary: 在 Workbuddy 中生成交互式结构图，支持结构化泳道、层级卡片、共享轨道矩阵与内联 SVG
 license: MIT
 description: 强大的AI自动化绘图与复杂信息可视化工具（基于 ContextWeave）。Workbuddy 增强版：支持生成并在对话框内直接展示内联 SVG 图形。通过深度的语义分析与请求编排，一键将晦涩文本与复杂知识转化为清晰直观的图形表达。
@@ -12,6 +12,12 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] } } }
 # ContextWeave Skill
 
 本 Skill 的定位是“绘图请求客户端”，负责把用户需求转换为可执行的绘图意图，并通过基于文件生成的单一路径与后端协同完成产出。
+
+## 配色选择与提交前核对
+
+整体颜色、语义色调和复合主题先整理为 base_palette；正文可保留意图说明，执行选择不能只留在正文。普通新建有颜色要求或自主选择主题时传色板，无偏好时显式 --use_default_palette；已有图继承，不重新选默认。只有局部高亮时整体默认选择可与 accent_targets 同用。
+
+通用双色／背景使用 version:1 的 primary、secondary、background，先核对 /capabilities.co_design.palette 的版本、字段和入口；不支持时不能丢字段绕过。authoring 使用自身模型／预设能力。逐项核对配色要求已进入执行参数，避免遗漏第二色或深色背景。参数及例子见[结构化配色交接](references/palette.md)。
 
 ## 结构化生成优先路由
 
@@ -133,7 +139,7 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] } } }
 1. 解析需求：识别用户想表达的核心问题、受众和信息密度
 2. 结构决策：基于哲学层原则选择图组织方式并显式定义关系
 3. 请求编排：将结构化意图组织为文件并写入 `input_file`
-4. 基于文件生成：`node scripts/generate_contextweave.cjs --input_file "<绝对文件路径>"`
+4. 基于文件生成：`node scripts/generate_contextweave.cjs --input_file "<绝对文件路径>"` --use_default_palette
 5. 结果校验：检查结构是否仍满足“论证性、关系显式、同构可读”
 
 ## 强制上下文拍平（Context Flattening）
@@ -164,8 +170,8 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] } } }
 
 ## 意图到命令模板
 
-- 请求编排：将结构化意图组织为文件后，向后端发起调用 - 基于文件生成：`node scripts/generate_contextweave.cjs --input_file "<绝对文件路径>" --output_name "<语义化文件名>" --output_dir "docs/diagrams"`
-- 大纲规划模式：对于特别复杂的逻辑结构，可通过附加参数启用大纲模式：`node scripts/generate_contextweave.cjs --input_file "<绝对文件路径>" --enable_plan true --output_name "<语义化文件名>" --output_dir "docs/diagrams"`
+- 请求编排：将结构化意图组织为文件后，向后端发起调用 - 基于文件生成：`node scripts/generate_contextweave.cjs --input_file "<绝对文件路径>" --output_name "<语义化文件名>" --output_dir "docs/diagrams"` --use_default_palette
+- 大纲规划模式：对于特别复杂的逻辑结构，可通过附加参数启用大纲模式：`node scripts/generate_contextweave.cjs --input_file "<绝对文件路径>" --enable_plan true --output_name "<语义化文件名>" --output_dir "docs/diagrams"` --use_default_palette
 - 导入已有文件：当用户提供 `.cw` 等现成文件时，直接调用：`node scripts/import_contextweave_code.cjs --path "<绝对文件路径>"`
 
 ## 参数约束与回填规则

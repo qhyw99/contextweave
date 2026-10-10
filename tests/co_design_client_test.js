@@ -1,3 +1,4 @@
+const { explicitDefaultFixture } = require("./palette_fixture.cjs");
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
@@ -20,7 +21,7 @@ const intent = { outline_intent_version: 2, source: '应用调用服务。服务
   try {
     for (const variant of ['', '-pay', '-pptx', '-workbuddy']) {
     const { CWClient: VariantClient } = require(`../skills/interactive-architecture-diagram${variant}/scripts/cw_client.cjs`);
-    const client = new VariantClient();
+    const client = explicitDefaultFixture(new VariantClient());
     let calls = 0;
     client.getCapabilities = async () => ({co_design:{versions:[1],execution:'joint'}});
     client.request = async (endpoint,payload,options) => {

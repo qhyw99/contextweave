@@ -1,3 +1,4 @@
+const { explicitDefaultFixture } = require("./palette_fixture.cjs");
 const assert = require("assert");
 const fs = require("fs");
 const path = require("path");
@@ -29,7 +30,7 @@ async function captureGenerationOptions(extraArgs) {
 }
 
 async function captureBackendPayload(enablePlan) {
-  const client = new CWClient();
+  const client = explicitDefaultFixture(new CWClient());
   let capturedPayload = null;
   client.request = async (endpoint, payload) => {
     assert.strictEqual(endpoint, "/run");
@@ -63,7 +64,7 @@ async function mainTest() {
   }
 
   const skill = fs.readFileSync(path.join(skillRoot, "SKILL.md"), "utf8");
-  assert.strictEqual(new CWClient().headers()["X-Skill-Version"], skill.match(/^version: ([^\r\n]+)$/m)?.[1]);
+  assert.strictEqual(explicitDefaultFixture(new CWClient()).headers()["X-Skill-Version"], skill.match(/^version: ([^\r\n]+)$/m)?.[1]);
   assert.match(skill, /中央主链配固定左右侧轨/);
   assert.match(skill, /--outline_file/);
   assert.match(skill, /普通容器分组、普通单轴流程/);

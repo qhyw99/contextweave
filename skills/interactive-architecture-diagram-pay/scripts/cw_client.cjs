@@ -1,3 +1,4 @@
+const { validateBasePalette, choosePalette, validatePaletteCapability } = require("./palette.cjs");
 const OUTLINE_INTENT_VERSION = 1;
 const MAX_OUTLINE_FILE_BYTES = 256 * 1024;
 const SAFE_OUTLINE_ID_RE = /^[A-Za-z_][A-Za-z0-9_-]*$/;
@@ -680,7 +681,7 @@ class CWClient {
     }
   }
 
-  async runGeneration({ userRequest, diagramType = null, outlineFile = null, coDesignRevision = null, coDesignEditPaths = null, coDesignUpstreamUsage = null, authoringFile = null, inputFile = null, sessionId = null, inputSequence = null, validateRequestLength = false, diagramStyle = null, morphology = null, accentTargets = null, basePalette = null, enablePlan = false, n = 1, topK = 1 }) {
+  async runGeneration({ userRequest, diagramType = null, outlineFile = null, coDesignRevision = null, coDesignEditPaths = null, coDesignUpstreamUsage = null, authoringFile = null, inputFile = null, sessionId = null, inputSequence = null, validateRequestLength = false, diagramStyle = null, morphology = null, accentTargets = null, basePalette = null, useDefaultPalette = false, enablePlan = false, n = 1, topK = 1 }) {
     const payload = {
       input_sequence: inputSequence,
       export_svg: true,
@@ -690,6 +691,13 @@ class CWClient {
       n: n,
       top_k: topK,
     };
+    if (basePalette !== null) {
+      const normalized = validateBasePalette(basePalette);
+      if (normalized.error) return normalized.error;
+      basePalette = normalized.value;
+    }
+    if (authoringFile && useDefaultPalette) return this.error("PALETTE_UNSUPPORTED", "--use_default_palette 只用于普通新建；authoring 使用模型或预设配色");
+    if (authoringFile && basePalette?.version) return validatePaletteCapability(null, basePalette, "authoring");
     if (authoringFile) {
       if (basePalette) payload.base_palette = basePalette;
       const error = await prepareAuthoring(this, { authoringFile, userRequest, inputFile, outlineFile, inputSequence, enablePlan, diagramStyle, morphology, diagramType, accentTargets, n, topK }, payload);
@@ -798,6 +806,15 @@ class CWClient {
       }
     }
 
+    const selection = choosePalette(basePalette, useDefaultPalette, sessionId || payload.initial_cw_code || payload.initial_d2_code);
+    if (selection.error) return selection.error;
+    payload.palette_choice = selection.choice;
+    if (basePalette?.version) {
+      const caps = await this.getCapabilities();
+      if (caps?.status === "error") return caps;
+      const error = validatePaletteCapability(caps, basePalette, diagramType === "swimlane" ? "swimlane" : "co_design");
+      if (error) return error;
+    }
     if (outlineFile) {
       const outlineResult = this.readOutlineIntentFile(outlineFile, payload.user_request);
       if (outlineResult.error) {
