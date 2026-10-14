@@ -2,7 +2,7 @@
 name: interactive-architecture-diagram-pptx
 slug: contextweave-interactive-architecture-pptx
 displayName: 架构图一键生成（PPTX 简化版）
-version: 1.7.0
+version: 1.7.1
 summary: 将架构、流程和长文本转换为结构图，默认且仅导出原生可编辑 PPTX
 license: MIT
 description: 使用 ContextWeave 生成或修改架构图、流程图、思维导图和复杂信息图，并以原生形状与连接器导出为可编辑 PPTX。适用于需要从代码、文件或自然语言中提取结构与关系并产出 PPTX 的请求。不适用于统计图表、手绘插画、像素级排版，或需要 SVG/HTML/CW 代码等其他导出格式的场景。

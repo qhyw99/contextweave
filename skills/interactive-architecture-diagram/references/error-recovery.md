@@ -10,13 +10,21 @@
 | `MISSING_SESSION_ID` | 校验返回并立即重试当前请求 |
 | `SESSION_INVALID_OR_EXPIRED` | 重建会话，再回放当前意图 |
 | `AUTH_ERROR` | 校验内置凭据与配置后重试；不要向用户索要 API Key |
-| `API_ERROR` | 瞬时网络错误与服务端 5xx 已自动进行最多 3 次指数退避；仍失败时检查网络或服务状态 |
+| `API_ERROR` | 没有权威回执的瞬时网络错误与 5xx 才自动退避；已有终态回执时直接处理该结果，不再次生成 |
 | `PROXY_ERROR` | 检查 `HTTPS_PROXY` / `HTTP_PROXY`；目标应直连时，由部署方将目标域名加入 `NO_PROXY`。代理配置、认证和 4xx 拒绝不会自动重试 |
 | `OUTDATED_SKILL` | 停止重试，按“Skill 版本升级”处理 |
 | `WAITING_FOR_EXPERT_PROCESSING` | 告知用户仍在处理，并主动轮询结果 |
 | `PAYMENT_REQUIRED` / `RATE_LIMIT_EXCEEDED` | 按“免费额度流程”处理 |
 
 本地预检错误：未落盘或未执行使用 `EXECUTION_NOT_PERFORMED`；文件不存在使用 `INPUT_FILE_NOT_FOUND`；路径不是绝对路径使用 `INPUT_FILE_NOT_ABSOLUTE`。
+
+### 已生成内容但未通过验收
+
+脚本 `status=error` 或退出码 1 不代表没有生成内容。先检查 `saved_artifacts`、`saved_svg_file` 和 `saved_pptx_file`，把已经保存的文件链接交给用户，并说明 `quality`、具体错误与 `receipt.quota.status`；不能仅展示错误后丢弃附件。只读候选 `editable=false` 尚未通过完整验收，不自动导入正式会话，也不称为正式成品。
+
+下载失败时说明文件尚未保存到本地，并保留回执找回入口；使用 `query_request.cjs` 查询原请求不会重新生成或扣次。凭据沿用本机已存配置或回执日志，不放进链接、聊天或请求正文。分片只有完整校验并合并后才称为完整内容，部分下载仍须说明缺失。
+
+明确终态失败不重复发送同号请求来“修复”：同号仅回放。继续生成需新请求；同一工作流只有 `recovery.actions` 允许且预算仍有效时，才携带返回的 session 和 `--co_design_revision` 续改。工作流已结束时按恢复指引新建，不能重置旧预算。取消后只呈现已有内容，不为补齐结果启动新调用。无生成内容时按实际错误说明“尚未生成”，不要把提交材料当成结果。
 
 ## 2. Skill 版本升级
 

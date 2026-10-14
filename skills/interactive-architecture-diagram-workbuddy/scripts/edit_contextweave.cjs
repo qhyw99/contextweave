@@ -118,7 +118,7 @@ async function main(argv = process.argv.slice(2), Client = CWClient) {
 
   result.output_name = outputName;
   result.output_dir = outputDir;
-  await downloadAssetsLocally(result);
+  await downloadAssetsLocally(result, client);
 
   printJson(result);
   if (result.status === "error") {

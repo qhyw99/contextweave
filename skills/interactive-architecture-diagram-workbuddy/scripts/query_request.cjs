@@ -23,13 +23,13 @@ async function main(argv = process.argv.slice(2), Client = CWClient) {
   if (args.record) writeRecord(args.record, { ...record, state: response.receipt.status, result, updated_at: new Date().toISOString() });
   const outputDir = path.resolve(typeof args.output_dir === "string" ? args.output_dir : process.cwd());
   const outputName = path.basename(typeof args.output_name === "string" ? args.output_name : String(requestId));
-  if (result.status === "ok") {
+  if (result.status === "ok" || result.artifacts?.length || result.co_design?.candidate?.d2_code || result.svg_url || result.raw_svg_url) {
     fs.mkdirSync(outputDir, { recursive: true });
     const choices = Array.isArray(result.choices) ? result.choices : [result];
     for (let i = 0; i < choices.length; i++) {
       const choice = choices[i];
       const name = result.choices ? `${outputName}_choice_${i+1}` : outputName;
-      if (choice.cw_code) {
+      if (choice.status !== "error" && choice.cw_code) {
         const file = path.join(outputDir, `${name}.cw`);
         fs.writeFileSync(file, `# session_id: ${choice.session_id || result.session_id || ""}\n${choice.cw_code}`, "utf8");
         choice.saved_cw_file = file;
@@ -41,8 +41,8 @@ async function main(argv = process.argv.slice(2), Client = CWClient) {
         choice.saved_svg_file = file;
         delete choice.svg;
       }
-      Object.assign(choice, normalizeAssetResult({ ...choice, status: "ok", output_name: name, output_dir: outputDir }));
-      await downloadAssetsLocally(choice);
+      Object.assign(choice, normalizeAssetResult({ ...choice, output_name: name, output_dir: outputDir }));
+      await downloadAssetsLocally(choice, client, record.request_token);
     }
   }
   result.saved_request_record = args.record || null;

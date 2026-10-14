@@ -792,7 +792,7 @@ class CWClient {
       payload.user_request = userRequest;
     }
 
-    if (validateRequestLength && !outlineFile) {
+    if (validateRequestLength && !outlineFile && coDesignRevision === null) {
       const minLength = parseInt(process.env.CONTEXTWEAVE_MIN_REQUEST_LENGTH || "50", 10);
       const maxLength = parseInt(process.env.CONTEXTWEAVE_MAX_REQUEST_LENGTH || "5000", 10);
       const reqLength = payload.user_request ? payload.user_request.length : 0;

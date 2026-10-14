@@ -69,7 +69,23 @@ async function main(argv = process.argv.slice(2), Client = CWClient) {
   const n = parseInt(args["--n"] || "1", 10);
   const topK = parseInt(args["--top_k"] || "1", 10);
 
-  if (!userRequest && !inputFile && !authoringFile && !outlineFile) {
+  let coDesignRevision = null, coDesignEditPaths = null, coDesignUpstreamUsage = null;
+  try {
+    if (args["--co_design_revision"] !== undefined) {
+      const value = args["--co_design_revision"];
+      if (typeof value !== "string" || !/^\d+$/.test(value)) throw Error("revision must be a nonnegative integer");
+      coDesignRevision = Number(value);
+      if (!Number.isSafeInteger(coDesignRevision)) throw Error("revision is too large");
+    }
+    if (args["--co_design_edit_paths"]) coDesignEditPaths = JSON.parse(args["--co_design_edit_paths"]);
+    if (args["--co_design_upstream_usage"]) coDesignUpstreamUsage = JSON.parse(args["--co_design_upstream_usage"]);
+  } catch(error) {
+    printJson({status:"error",error:{code:"INVALID_CO_DESIGN_OPTIONS",message:String(error.message)}});
+    process.exit(1);
+  }
+
+
+  if (!userRequest && !inputFile && !authoringFile && !outlineFile && !(sessionId && coDesignRevision !== null)) {
     printJson({
       status: "error",
       error: {
@@ -110,27 +126,12 @@ async function main(argv = process.argv.slice(2), Client = CWClient) {
     basePalette = validation.value;
   }
 
-  let coDesignRevision = null, coDesignEditPaths = null, coDesignUpstreamUsage = null;
-  try {
-    if (args["--co_design_revision"]) {
-      coDesignRevision = Number(args["--co_design_revision"]);
-      if (!Number.isSafeInteger(coDesignRevision) || coDesignRevision < 0) throw new Error("revision must be a nonnegative integer");
-    }
-    if (args["--co_design_edit_paths"]) coDesignEditPaths = JSON.parse(args["--co_design_edit_paths"]);
-    if (args["--co_design_upstream_usage"]) coDesignUpstreamUsage = JSON.parse(args["--co_design_upstream_usage"]);
-  } catch (error) {
-    printJson({status:"error",error:{code:"INVALID_CO_DESIGN_OPTIONS",message:String(error.message)}});
-    process.exit(1);
-  }
   const client = new Client();
   const rawResult = await client.runGeneration({
     userRequest,
     inputFile,
     enablePlan,
     outlineFile,
-    coDesignRevision,
-    coDesignEditPaths,
-    coDesignUpstreamUsage,
     diagramType,
     authoringFile,
     sessionId,
@@ -142,6 +143,9 @@ async function main(argv = process.argv.slice(2), Client = CWClient) {
     useDefaultPalette: args["--use_default_palette"] === "true",
     n,
     topK,
+    coDesignRevision,
+    coDesignEditPaths,
+    coDesignUpstreamUsage,
   });
 
   const result = normalizeGenerationResult(authoringFile ? validateAuthoringResult(rawResult, "pptx") : rawResult);
@@ -159,14 +163,14 @@ async function main(argv = process.argv.slice(2), Client = CWClient) {
         output_dir: outputDir,
         pptx_url: choice.pptx_url,
       };
-      await downloadAssetsLocally(tempObj);
+      await downloadAssetsLocally(tempObj, client);
       if (tempObj.saved_pptx_file) choice.saved_pptx_file = tempObj.saved_pptx_file;
       if (tempObj.message) choice.message = tempObj.message;
     }
   } else if (result.status === "ok") {
     result.output_name = outputName;
     result.output_dir = outputDir;
-    await downloadAssetsLocally(result);
+    await downloadAssetsLocally(result, client);
   }
 
   printJson(result);

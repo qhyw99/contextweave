@@ -861,7 +861,7 @@ class CWClient {
       payload.user_request = userRequest;
     }
 
-    if (validateRequestLength && !outlineFile) {
+    if (validateRequestLength && !outlineFile && coDesignRevision === null) {
       const minLength = parseInt(process.env.CONTEXTWEAVE_MIN_REQUEST_LENGTH || "50", 10);
       const maxLength = parseInt(process.env.CONTEXTWEAVE_MAX_REQUEST_LENGTH || "5000", 10);
       const reqLength = payload.user_request ? payload.user_request.length : 0;
@@ -977,7 +977,7 @@ function normalizeAssetResult(result) {
   return result;
 }
 
-async function downloadFile(urlString, dest) {
+async function downloadFile(urlString, dest, headers = {}, timeoutMs = 3000000) {
   try {
     new URL(urlString);
   } catch (e) {
@@ -985,7 +985,7 @@ async function downloadFile(urlString, dest) {
   }
 
   try {
-    const response = await makeRequest(urlString, { method: "GET" }, null, 3000000);
+    const response = await makeRequest(urlString, { method: "GET", headers }, null, timeoutMs);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw new Error(`Failed to download file, status code: ${response.statusCode}`);
     }
@@ -1017,8 +1017,8 @@ async function downloadFile(urlString, dest) {
   }
 }
 
-async function downloadAssetsLocally(result) {
-  if (!result || result.status !== "ok") {
+async function downloadAssetsLocally(result, client = null, receiptToken = null) {
+  if (!result || (result.status !== "ok" && !result.artifacts?.length && !result.co_design?.candidate?.d2_code && !result.raw_svg_url && !result.svg_url)) {
     return result;
   }
 
@@ -1031,6 +1031,69 @@ async function downloadAssetsLocally(result) {
     if (!fs.existsSync(targetDir)) {
       fs.mkdirSync(targetDir, { recursive: true });
     }
+  }
+
+  // Protected generated-content snapshots are returned even on business failure.
+  // Credential headers go only to the configured API origin, never arbitrary URLs.
+  result.saved_artifacts = result.saved_artifacts || [];
+  for (const artifact of result.artifacts || []) {
+    if (!artifact.available || !/^\/requests\/[a-f0-9]{32}\/artifacts\/[a-f0-9]{32}$/.test(artifact.download_path || "")) continue;
+    const auth = result._artifactAuth || (client && {
+      baseUrl: client.baseUrl,
+      headers: { ...(typeof client.headers === "function" ? { "X-API-Key": client.headers()["X-API-Key"] } : {}),
+        "X-Receipt-Token": receiptToken || result.receipt?.access_token },
+    });
+    if (!auth?.baseUrl) {
+      result.warnings = [...(result.warnings || []), "生成内容已保存，需通过原 Key 或回执凭证下载；可运行 query_request.cjs 找回。"];
+      continue;
+    }
+    const format = ["txt", "json", "cw", "d2", "svg", "pptx", "vsdx", "bin"].includes(artifact.format) ? artifact.format : "txt";
+    const dest = path.join(targetDir, `${path.basename(outputName)}_content_${artifact.id}.${format}`);
+    try {
+      const headers = Object.fromEntries(Object.entries(auth.headers || {}).filter(([,v])=>typeof v === "string" && v));
+      await downloadFile(auth.baseUrl + artifact.download_path, dest, headers, 60000);
+      if (fs.statSync(dest).size !== artifact.bytes || crypto.createHash("sha256").update(fs.readFileSync(dest)).digest("hex") !== artifact.sha256) {
+        fs.unlinkSync(dest);
+        throw new Error("生成内容摘要不匹配，已停止使用该文件");
+      }
+      result.saved_artifacts.push({ id: artifact.id, kind: artifact.kind, revision: artifact.revision,
+        format, sha256:artifact.sha256, editable: artifact.editable === true, file_path: dest });
+    } catch (err) {
+      result.warnings = [...(result.warnings || []), `生成内容下载失败；回执仍可找回：${String(err.message || err)}`];
+    }
+  }
+  const groups = new Map();
+  for (const a of result.artifacts || []) {
+    if (a.part_count && /^[a-f0-9]{64}$/.test(a.content_sha256 || "")) {
+      if (!groups.has(a.content_sha256)) groups.set(a.content_sha256, []);
+      groups.get(a.content_sha256).push(a);
+    }
+  }
+  for (const [sha, parts] of groups) {
+    parts.sort((a,b)=>a.part_index-b.part_index);
+    if (parts.length !== parts[0].part_count || parts.some((a,i)=>a.part_index!==i+1)) continue;
+    const files = parts.map(a=>result.saved_artifacts.find(s=>s.id===a.id));
+    if (files.some(a=>!a)) continue;
+    const format = ["txt","json","cw","d2","svg","bin"].includes(parts[0].original_format) ? parts[0].original_format : "txt";
+    const dest = path.join(targetDir, `${path.basename(outputName)}_content_${sha}.${format}`);
+    const temporary = dest+"."+crypto.randomBytes(6).toString("hex")+".part";
+    try {
+      const fd = fs.openSync(temporary, "wx"); const hash = crypto.createHash("sha256"); let size=0;
+      try { for (const file of files) { const bytes=fs.readFileSync(file.file_path); hash.update(bytes); fs.writeFileSync(fd,bytes); size+=bytes.length; } }
+      finally { fs.closeSync(fd); }
+      if (size!==parts[0].original_bytes || hash.digest("hex")!==sha) throw Error("分片合并后摘要不匹配");
+      fs.renameSync(temporary,dest);
+      result.saved_artifacts.push({kind:parts[0].original_kind,format,editable:false,file_path:dest,sha256:sha,reassembled:true});
+    } catch(err) { if(fs.existsSync(temporary))fs.unlinkSync(temporary);result.warnings=[...(result.warnings||[]),"分片文件已保留，但合并失败；可按编号恢复："+String(err.message||err)]; }
+  }
+  if (typeof result.co_design?.candidate?.d2_code === "string" && !result.saved_artifacts.some(a=>a.sha256===crypto.createHash("sha256").update(result.co_design.candidate.d2_code).digest("hex"))) {
+    const content = result.co_design.candidate.d2_code;
+    const dest = path.join(targetDir, `${path.basename(outputName)}_unaccepted_candidate.txt`);
+    fs.writeFileSync(dest, content, "utf8");
+    result.saved_artifacts.push({kind:"source",format:"txt",editable:false,file_path:dest,derived:true});
+  }
+  if (result.saved_artifacts.length && result.quality !== "accepted") {
+    result.message = (result.message ? result.message + "\n" : "") + "已保存生成内容；尚未通过完整验收，请先查看。次数状态以回执为准。";
   }
 
   // 简化版：仅下载 PPTX 产物

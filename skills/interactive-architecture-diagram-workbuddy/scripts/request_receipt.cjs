@@ -42,6 +42,10 @@ async function withRequestReceipt(client, endpoint, execute) {
   }
   result.request_id = requestId;
   result.saved_request_record = file;
+  Object.defineProperty(result, "_artifactAuth", { enumerable: false, value: {
+    baseUrl: client.baseUrl, headers: { "X-API-Key": headers["X-API-Key"],
+      "X-Receipt-Token": result.receipt?.access_token || token },
+  } });
   if (!result.receipt && result.status === "error") {
     result.error = { ...result.error, recovery_hint:
       `执行与扣次状态尚未确认。先运行 node scripts/query_request.cjs --record "${file}" 查询原请求，再决定是否重新提交。` };
