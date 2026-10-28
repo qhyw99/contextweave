@@ -2,7 +2,7 @@
 name: interactive-architecture-diagram-workbuddy
 slug: contextweave-interactive-architecture-workbuddy
 displayName: 架构图一键生成（Workbuddy）
-version: 1.7.1
+version: 1.7.2
 summary: 在 Workbuddy 中生成交互式结构图，支持结构化泳道、层级卡片、共享轨道矩阵与内联 SVG
 license: MIT
 description: 强大的AI自动化绘图与复杂信息可视化工具（基于 ContextWeave）。Workbuddy 增强版：支持生成并在对话框内直接展示内联 SVG 图形。通过深度的语义分析与请求编排，一键将晦涩文本与复杂知识转化为清晰直观的图形表达。
@@ -10,6 +10,8 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] } } }
 ---
 
 # ContextWeave Skill
+
+HTML 与 SVG 分别保存；未通过完整验收的可用预览也保留 HTML，页面中的未验收标记继续有效。
 
 本 Skill 的定位是“绘图请求客户端”，负责把用户需求转换为可执行的绘图意图，并通过基于文件生成的单一路径与后端协同完成产出。
 

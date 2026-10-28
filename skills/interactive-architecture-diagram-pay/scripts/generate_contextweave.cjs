@@ -26,7 +26,7 @@ function normalizeGenerationResult(result) {
   if (result.status === "ok" && Array.isArray(result.choices)) {
     result.choices = result.choices.map(choice => {
       let normalized = normalizeAssetResult(choice);
-      if (!normalized.svg_url) {
+      if (!normalized.svg_url && !normalized.html_url && !normalized.svg_content && !normalized.html_content) {
         normalized.message = "由于图表极为复杂，当前已进入后台专家队列进行深度处理。请告知用户图表正在处理中，并立即主动运行 `node scripts/recompile_contextweave.cjs --session_id <session_id>` 拉取结果（脚本内置自动轮询），不要让用户手动触发。";
         normalized.svg_url = "WAITING_FOR_EXPERT_PROCESSING";
       }
@@ -60,7 +60,7 @@ function normalizeGenerationResult(result) {
       raw_result: result,
     };
   }
-  if (result.status === "ok" && !result.svg_url) {
+  if (result.status === "ok" && !result.svg_url && !result.html_url && !result.svg_content && !result.html_content) {
     result.message = "由于图表极为复杂，当前已进入后台专家队列进行深度处理。请告知用户图表正在处理中，并立即主动运行 `node scripts/recompile_contextweave.cjs --session_id <session_id>` 拉取结果（脚本内置自动轮询，默认最长等待约 20 分钟，生成完成即返回），不要让用户手动触发。";
     result.svg_url = "WAITING_FOR_EXPERT_PROCESSING";
   }
@@ -222,17 +222,25 @@ async function main(argv = process.argv.slice(2), Client = CWClient) {
 
       // Download assets for this choice
       const tempObj = {
-        status: "ok",
+        status: choice.status || "ok",
+        artifacts: choice.artifacts,
+        receipt: choice.receipt || result.receipt,
         session_id: choice.session_id || result.session_id,
         output_name: outputName ? `${outputName}${suffix}` : `${result.session_id || "diagram"}${suffix}`,
         output_dir: outputDir,
+        html_content: choice.html_content,
+        svg_content: choice.svg_content,
+        html_url: choice.html_url,
         raw_svg_url: choice.raw_svg_url,
         svg_url: choice.svg_url,
         pptx_url: choice.pptx_url,
       };
+      Object.defineProperty(tempObj, "_artifactAuth", { value: choice._artifactAuth || result._artifactAuth, enumerable: false });
       await downloadAssetsLocally(tempObj, client);
 
-      if (tempObj.saved_svg_file) choice.saved_svg_file = tempObj.saved_svg_file;
+      if (tempObj.saved_html_file) { choice.saved_html_file = tempObj.saved_html_file; delete choice.html_content; }
+      if (tempObj.saved_svg_file) { choice.saved_svg_file = tempObj.saved_svg_file; delete choice.svg_content; }
+      if (tempObj.warnings?.length) choice.warnings = [...(choice.warnings || []), ...tempObj.warnings];
       if (tempObj.saved_pptx_file) choice.saved_pptx_file = tempObj.saved_pptx_file;
       if (tempObj.message) choice.message = tempObj.message;
     }

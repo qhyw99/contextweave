@@ -23,7 +23,7 @@ async function main(argv = process.argv.slice(2), Client = CWClient) {
   if (args.record) writeRecord(args.record, { ...record, state: response.receipt.status, result, updated_at: new Date().toISOString() });
   const outputDir = path.resolve(typeof args.output_dir === "string" ? args.output_dir : process.cwd());
   const outputName = path.basename(typeof args.output_name === "string" ? args.output_name : String(requestId));
-  if (result.status === "ok" || result.artifacts?.length || result.co_design?.candidate?.d2_code || result.svg_url || result.raw_svg_url) {
+  if (result.status === "ok" || result.artifacts?.length || result.co_design?.candidate?.d2_code || result.html_url || result.svg_url || result.raw_svg_url || result.html_content || result.svg_content) {
     fs.mkdirSync(outputDir, { recursive: true });
     const choices = Array.isArray(result.choices) ? result.choices : [result];
     for (let i = 0; i < choices.length; i++) {

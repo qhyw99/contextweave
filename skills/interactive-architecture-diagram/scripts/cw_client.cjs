@@ -1022,22 +1022,53 @@ function printJson(data) {
   process.stdout.write(`${JSON.stringify(data, null, 2)}\n`);
 }
 
+function visualAssetUrls(result) {
+  const available = value => typeof value === "string" && value && value !== "WAITING_FOR_EXPERT_PROCESSING";
+  const isHtml = value => {
+    try { return /\.html?$/i.test(new URL(value, "https://assets.invalid").pathname); }
+    catch { return false; }
+  };
+  // Older servers used svg_url for the HTML delivery page. Keep that response
+  // readable without guessing that a same-named SVG exists on the server.
+  const html = available(result.html_url) ? result.html_url
+    : available(result.svg_url) && (isHtml(result.svg_url) || (result.delivery_file_type === "html" && result.svg_url !== result.raw_svg_url)) ? result.svg_url
+    : available(result.download_url) && (result.delivery_file_type === "html" || result.format === "html" || isHtml(result.download_url)) ? result.download_url : null;
+  const svg = available(result.raw_svg_url) ? result.raw_svg_url
+    : available(result.svg_url) && result.svg_url !== html && !isHtml(result.svg_url) ? result.svg_url
+    : available(result.download_url) && (result.delivery_file_type === "svg" || result.format === "svg") && result.download_url !== html ? result.download_url : null;
+  return { html, svg };
+}
+
 function normalizeAssetResult(result) {
-  if (!result || typeof result !== "object") {
-    return result;
-  }
-
-  // We don't need to do anything complex anymore, because the backend (mcp_server)
-  // now sets the "svg_url" to the primary HTML wrapper link if HTML is enabled.
-  // It also returns "raw_svg_url" if we ever need the actual SVG link.
-
-  // Clean up excessive fields to keep the output clean
-  delete result.html_url;
+  if (!result || typeof result !== "object") return result;
+  const { html } = visualAssetUrls(result);
+  if (html) result.html_url = html;
   delete result.primary_asset_url;
   delete result.preferred_asset_url;
   delete result.url;
-
   return result;
+}
+
+function assetDownloadAuth(result, client, receiptToken) {
+  return result._artifactAuth || (client && {
+    baseUrl: client.baseUrl,
+    headers: { ...(typeof client.headers === "function" ? { "X-API-Key": client.headers()["X-API-Key"] } : {}),
+      "X-Receipt-Token": receiptToken || result.receipt?.access_token },
+  });
+}
+
+function visualAssetRequest(url, auth) {
+  const artifactPath = /^\/requests\/[a-f0-9]{32}\/artifacts\/[a-f0-9]{32}$/;
+  if (url.startsWith("/")) {
+    if (!artifactPath.test(url) || !auth?.baseUrl) throw new Error("受保护资源需要原 API 地址及 Key 或回执凭证");
+    return { url: new URL(url, auth.baseUrl).href,
+      headers: Object.fromEntries(Object.entries(auth.headers || {}).filter(([, value]) => typeof value === "string" && value)) };
+  }
+  const parsed = new URL(url);
+  if (auth?.baseUrl && artifactPath.test(parsed.pathname) && parsed.origin === new URL(auth.baseUrl).origin) {
+    return { url, headers: Object.fromEntries(Object.entries(auth.headers || {}).filter(([, value]) => typeof value === "string" && value)) };
+  }
+  return { url, headers: {} };
 }
 
 async function downloadFile(urlString, dest, headers = {}, timeoutMs = 3000000) {
@@ -1081,7 +1112,7 @@ async function downloadFile(urlString, dest, headers = {}, timeoutMs = 3000000) 
 }
 
 async function downloadAssetsLocally(result, client = null, receiptToken = null) {
-  if (!result || (result.status !== "ok" && !result.artifacts?.length && !result.co_design?.candidate?.d2_code && !result.raw_svg_url && !result.svg_url)) {
+  if (!result || (result.status !== "ok" && !result.artifacts?.length && !result.co_design?.candidate?.d2_code && !visualAssetUrls(result).html && !visualAssetUrls(result).svg && !result.html_content && !result.svg_content)) {
     return result;
   }
 
@@ -1110,7 +1141,7 @@ async function downloadAssetsLocally(result, client = null, receiptToken = null)
       result.warnings = [...(result.warnings || []), "生成内容已保存，需通过原 Key 或回执凭证下载；可运行 query_request.cjs 找回。"];
       continue;
     }
-    const format = ["txt", "json", "cw", "d2", "svg", "pptx", "vsdx", "bin"].includes(artifact.format) ? artifact.format : "txt";
+    const format = ["txt", "json", "cw", "d2", "svg", "html", "pptx", "vsdx", "bin"].includes(artifact.format) ? artifact.format : "txt";
     const dest = path.join(targetDir, `${path.basename(outputName)}_content_${artifact.id}.${format}`);
     try {
       const headers = Object.fromEntries(Object.entries(auth.headers || {}).filter(([,v])=>typeof v === "string" && v));
@@ -1137,7 +1168,7 @@ async function downloadAssetsLocally(result, client = null, receiptToken = null)
     if (parts.length !== parts[0].part_count || parts.some((a,i)=>a.part_index!==i+1)) continue;
     const files = parts.map(a=>result.saved_artifacts.find(s=>s.id===a.id));
     if (files.some(a=>!a)) continue;
-    const format = ["txt","json","cw","d2","svg","bin"].includes(parts[0].original_format) ? parts[0].original_format : "txt";
+    const format = ["txt","json","cw","d2","svg","html","bin"].includes(parts[0].original_format) ? parts[0].original_format : "txt";
     const dest = path.join(targetDir, `${path.basename(outputName)}_content_${sha}.${format}`);
     const temporary = dest+"."+crypto.randomBytes(6).toString("hex")+".part";
     try {
@@ -1159,19 +1190,33 @@ async function downloadAssetsLocally(result, client = null, receiptToken = null)
     result.message = (result.message ? result.message + "\n" : "") + "已保存生成内容；尚未通过完整验收，请先查看。次数状态以回执为准。";
   }
 
-  // Handle svg_url or raw_svg_url
-  const svgUrl = result.raw_svg_url || result.svg_url;
-  if (svgUrl && svgUrl !== "WAITING_FOR_EXPERT_PROCESSING") {
-    // If it's HTML wrapper, the download might get HTML. It's better to fetch raw_svg_url if available, or just download what's there.
-    const ext = svgUrl.includes(".html") ? ".html" : ".svg";
-    const dest = path.join(targetDir, `${outputName}${ext}`);
+  // HTML and SVG are independent resources, including when quality is rejected.
+  for (const [format, url] of Object.entries(visualAssetUrls(result))) {
+    const contentField = `${format}_content`;
+    const content = result[contentField];
+    if (!url && (typeof content !== "string" || !content.trim())) continue;
+    const label = format.toUpperCase();
+    const dest = path.join(targetDir, `${outputName}.${format}`);
     try {
-      await downloadFile(svgUrl, dest);
-      result.saved_svg_file = dest;
-      result.message = (result.message ? result.message + "\n" : "") + `资源已自动下载到本地：${dest}`;
+      const artifact = (result.artifacts || []).find(item => item.download_path === url && item.format === format);
+      const saved = artifact && (result.saved_artifacts || []).find(item => item.id === artifact.id && item.format === format);
+      if (!url) {
+        fs.writeFileSync(dest, content, "utf8");
+        result[`saved_${format}_file`] = dest;
+      } else if (saved) {
+        result[`saved_${format}_file`] = saved.file_path;
+      } else if (artifact) {
+        throw new Error("生成内容未能通过下载校验，请通过原回执重试");
+      } else {
+        const request = visualAssetRequest(url, assetDownloadAuth(result, client, receiptToken));
+        await downloadFile(request.url, dest, request.headers);
+        result[`saved_${format}_file`] = dest;
+      }
+      delete result[contentField];
+      result.message = (result.message ? result.message + "\n" : "") + `${label} 资源已自动保存到本地：${result[`saved_${format}_file`]}`;
     } catch (err) {
       if (!Array.isArray(result.warnings)) result.warnings = [];
-      result.warnings.push(`SVG/HTML 资源下载失败：${err && err.isProxyError ? safeProxyErrorMessage(err) : String(err.message || err)}`);
+      result.warnings.push(`${label} 资源下载失败：${err && err.isProxyError ? safeProxyErrorMessage(err) : String(err.message || err)}`);
     }
   }
 

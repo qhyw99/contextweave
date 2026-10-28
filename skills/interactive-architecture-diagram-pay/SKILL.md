@@ -2,7 +2,7 @@
 name: interactive-architecture-diagram-pay
 slug: contextweave-interactive-architecture-pay
 displayName: 架构图一键生成（支付宝付费版）
-version: 1.1.0
+version: 1.1.1
 summary: 通过支付宝 A2M 按次付费，将架构、流程和长文本转换为交互式结构图
 license: MIT
 description: 使用 ContextWeave 生成或修改架构图、流程图、思维导图和复杂信息图，并通过支付宝 AI 按量付费（A2M / HTTP 402）完成单次调用支付。适用于需要从代码、文件或自然语言中提取结构与关系并实际产出 CW、SVG、HTML 或可编辑 PPTX 的付费绘图请求；未特别说明时，PPTX 使用原生形状与连接器导出。不适用于统计图表、手绘插画或像素级排版。
@@ -10,6 +10,8 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"], "anyB
 ---
 
 # ContextWeave Pay Skill
+
+HTML 与 SVG 分别保存；未通过完整验收的可用预览也保留 HTML，页面中的未验收标记继续有效。
 
 本 Skill 是 ContextWeave 的付费绘图请求客户端：把用户需求整理成自包含的绘图意图，通过本地脚本、ContextWeave 云端后端与支付宝官方支付组件协同生成结果。绘图会话由后端托管；支付账单与履约状态只在当前工作区的受保护状态目录中短期保存。
 

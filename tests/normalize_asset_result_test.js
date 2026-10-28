@@ -19,7 +19,7 @@ const infographicClient = require(path.join(
   "cw_client.cjs"
 ));
 
-function runSharedAssertions(normalizeAssetResult) {
+function runSharedAssertions(normalizeAssetResult, keepsHtml) {
   const withHtml = normalizeAssetResult({
     delivery_file_type: "html",
     download_url: "https://example.com/diagram.html",
@@ -31,7 +31,7 @@ function runSharedAssertions(normalizeAssetResult) {
 
   assert.strictEqual(withHtml.svg_url, "https://example.com/diagram.html");
   assert.strictEqual(withHtml.raw_svg_url, "https://example.com/diagram.svg");
-  assert.strictEqual(withHtml.html_url, undefined);
+  assert.strictEqual(withHtml.html_url, keepsHtml ? "https://example.com/diagram.html" : undefined);
   assert.strictEqual(withHtml.primary_asset_url, undefined);
 
   const svgOnly = normalizeAssetResult({
@@ -45,7 +45,7 @@ function runSharedAssertions(normalizeAssetResult) {
   assert.strictEqual(svgOnly.raw_svg_url, "https://example.com/diagram.svg");
 }
 
-runSharedAssertions(architectureClient.normalizeAssetResult);
-runSharedAssertions(infographicClient.normalizeAssetResult);
+runSharedAssertions(architectureClient.normalizeAssetResult, true);
+runSharedAssertions(infographicClient.normalizeAssetResult, false);
 
 console.log("normalize_asset_result_test passed");
