@@ -82,6 +82,11 @@ async function prepareAuthoring(client, options, payload) {
   if (authoring.status === "error") return authoring;
   const capabilities = await client.getCapabilities();
   if (capabilities?.status === "error") return capabilities;
+  const hasAnnotations = authoring.format === "json" ? Object.hasOwn(authoring.source, "annotations") : /<aside\b|data-annotations\s*=/.test(authoring.source);
+  if (hasAnnotations) {
+    const error = require("./annotations.cjs").unsupported(capabilities);
+    if (error) return error;
+  }
   const supported = capabilities?.authoring;
   if (!supported?.versions?.includes(1) || !supported?.formats?.includes(authoring.format)
       || !["swimlane", "cards", "matrix"].every(kind => supported?.kinds?.includes(kind))) {

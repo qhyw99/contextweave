@@ -2,7 +2,7 @@
 name: interactive-architecture-diagram-workbuddy
 slug: contextweave-interactive-architecture-workbuddy
 displayName: 架构图一键生成（Workbuddy）
-version: 1.7.2
+version: 1.8.0
 summary: 在 Workbuddy 中生成交互式结构图，支持结构化泳道、层级卡片、共享轨道矩阵与内联 SVG
 license: MIT
 description: 强大的AI自动化绘图与复杂信息可视化工具（基于 ContextWeave）。Workbuddy 增强版：支持生成并在对话框内直接展示内联 SVG 图形。通过深度的语义分析与请求编排，一键将晦涩文本与复杂知识转化为清晰直观的图形表达。
@@ -14,6 +14,10 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] } } }
 HTML 与 SVG 分别保存；未通过完整验收的可用预览也保留 HTML，页面中的未验收标记继续有效。
 
 本 Skill 的定位是“绘图请求客户端”，负责把用户需求转换为可执行的绘图意图，并通过基于文件生成的单一路径与后端协同完成产出。
+
+## 结构化备注
+
+需要旁注、补充说明或待确认事项时，读取 [结构化备注](references/annotations.md)，使用 annotations 或 --annotations_file；不要把备注排成普通业务容器。真实步骤、判断条件和关系仍保留在主图。只修改备注时使用备注专用编辑调用，保留主图布局与原验收状态。
 
 ## 配色选择与提交前核对
 
@@ -178,32 +182,34 @@ HTML 与 SVG 分别保存；未通过完整验收的可用预览也保留 HTML�
 
 ## 参数约束与回填规则
 - 初始生成的 `user_request` 长度：默认必须在 50-500 字符之间。如果需要调整限制，可通过环境变量 `CONTEXTWEAVE_MIN_REQUEST_LENGTH` 与 `CONTEXTWEAVE_MAX_REQUEST_LENGTH` 自定义。
-- `input_file`：必填，且必须为绝对路径
+- 普通生成的 input_file 必填且为绝对路径；结构化作者输入及纯备注编辑按各自协议执行
 - `output_name`：必填，应为反映绘图意图的简短英文字符串，如 `system_arch`。
 - `output_dir`：推荐，建议指定为相对项目根目录的子目录，如 `docs/diagrams`。
 - `input_file`：执行前必须存在且可读；不存在时禁止调用脚本
 - 文件内容：必须是结构化意图结果；禁止整个文件为空或仅放零散关键词；首次生成时允许 `# CW` 段为空
-- 返回回填：每轮输出必须包含本轮脚本名、执行状态、核心返回字段
+- 返回回填：工具回执保留本轮脚本名、执行状态和核心返回字段；用户回复按“面向用户交付”处理
 - 若未完成落盘或未实际执行脚本：返回 `status: error` 且标记 `code: EXECUTION_NOT_PERFORMED`
-- 若 `input_file` 不存在：返回 `status: error` 且标记 `code: INPUT_FILE_NOT_FOUND`
-- 若 `input_file` 非绝对路径：返回 `status: error` 且标记 `code: INPUT_FILE_NOT_ABSOLUTE`
+- 若 `input_file` 不存在：脚本回执返回 `status: error` 且标记 `code: INPUT_FILE_NOT_FOUND`
+- 若 `input_file` 非绝对路径：脚本回执返回 `status: error` 且标记 `code: INPUT_FILE_NOT_ABSOLUTE`
 
-## 回复格式硬约束
+## 面向用户交付
 
-- 回复必须是单个 JSON 对象，禁止 markdown、标题、解释性段落、代码块
-- 未执行脚本时禁止返回“方案说明”，必须返回错误 JSON
-- JSON 字段顺序固定为：`script`、`input_file`、`status`、`session_id`、`result`、`error`
-- `status` 仅允许 `ok` 或 `error`
-- `status=ok` 时必须包含 `session_id` 与 `result`；`error` 置为 `null`
-- `status=error` 时必须包含 `error.code` 与 `error.message`；`session_id` 置为 `null`
+脚本的 JSON 是机器回执，Agent 读取后用简短自然语言向用户交付。默认提供真实可打开的 HTML／所需文件链接和必要的读图说明；只有用户明确要求机器格式时才展示 JSON。不要回显整份回执、内部脚本参数、空字段或空链接。
 
-### 成功 JSON 模板
+- 已验收：说明已生成，提供图入口并简述核心内容。
+- 可查看草稿：先提供真实草稿入口，明确“未通过完整验收”及具体剩余问题；保留可用的导出和编辑能力，不改称正式图。
+- 没有可用产物：简述实际失败原因与下一步；不伪造链接、session_id 或成功状态。
+- 多图：按视图名称列出实际入口和各自状态；共用交互页时提供一个入口并说明可切换的视图。
+- 返还次数、导出成功等事实只依据真实回执。完整回执和恢复 ID 保留在工具结果／本地记录，不要求用户处理内部字段。
 
-`{"script":"generate_contextweave.cjs","input_file":"/abs/path/request_xxx.md","status":"ok","session_id":"<session_id>","result":{"run_id":"<run_id>","svg_url":"<svg_url>"},"error":null}`
+示例（链接必须替换为本次真实产物，不照抄占位链接）：
 
-### 失败 JSON 模板
+> 已生成架构图。[打开交互图](实际HTML路径)。主链路是申请、校验和业务放行。
 
-`{"script":"generate_contextweave.cjs","input_file":"/abs/path/request_xxx.md","status":"error","session_id":null,"result":null,"error":{"code":"EXECUTION_NOT_PERFORMED","message":"未完成落盘或未执行脚本"}}`
+> 两张讨论稿已保存：[打开交互图](实际HTML路径)，可切换组件图与流程图。关系证据和局部布局尚未通过完整验收，请暂作为讨论稿使用。
+
+> 本次未生成可查看的图，原因是输入中的关系端点不存在。需要修正该端点后重试。
+
 
 ## 文件落盘与执行规范
 
@@ -230,9 +236,9 @@ HTML 与 SVG 分别保存；未通过完整验收的可用预览也保留 HTML�
   [在这里放入当前已有的 CW 文本]
   ```
   ````
-- 完整执行顺序：生成结构化内容 → 写文件 → 校验路径绝对性与文件存在 → 执行脚本 → 解析 JSON → 输出回填
-- 成功输出至少包含：`script`、`input_file`、`status`、`session_id`、关键产物字段，且 `input_file` 必须是实际存在路径
-- 失败输出至少包含：`script`、`input_file`、`status:error`、`error.code`、`error.message`
+- 完整执行顺序：生成结构化内容 → 写文件 → 校验路径绝对性与文件存在 → 执行脚本 → 解析 JSON → 自然语言交付
+- 成功工具回执至少包含：`script`、`input_file`、`status`、`session_id`、关键产物字段，且 `input_file` 必须是实际存在路径
+- 失败工具回执至少包含：`script`、`input_file`、`status:error`、`error.code`、`error.message`
 - **语义化产物命名与归档**：在执行 `generate_contextweave.cjs` 和 `edit_contextweave.cjs` 时，**必须**根据用户的意图推断出一个简短且语义化的英文文件名（例如 `user_login_flow`），并通过 `--output_name <名称>` 参数传入。同时，强烈建议通过 `--output_dir "docs/diagrams"` 等参数，将生成的图表集中管理，避免污染项目根目录。
 - **默认代码落盘行为**：脚本会自动将后端返回的最新 `cw_code` 连同 `session_id` 注释一起保存为 `<output_dir>/<output_name>.cw` 文件（未提供参数时降级为 `diagram.cw` 或 `<session_id>.cw`），并同步下载 SVG/HTML 等附属资源，省去了用户手动导出的繁琐步骤。
 

@@ -780,7 +780,7 @@ class CWClient {
     }
   }
 
-  async runGeneration({ userRequest, diagramType = null, authoringFile = null, inputFile = null, outlineFile = null, coDesignRevision = null, coDesignEditPaths = null, coDesignUpstreamUsage = null, sessionId = null, inputSequence = null, validateRequestLength = false, diagramStyle = null, morphology = null, accentTargets = null, basePalette = null, useDefaultPalette = false, enablePlan = false, n = 1, topK = 1 }) {
+  async runGeneration({ userRequest, annotationsFile = null, diagramType = null, authoringFile = null, inputFile = null, outlineFile = null, coDesignRevision = null, coDesignEditPaths = null, coDesignUpstreamUsage = null, sessionId = null, inputSequence = null, validateRequestLength = false, diagramStyle = null, morphology = null, accentTargets = null, basePalette = null, useDefaultPalette = false, enablePlan = false, n = 1, topK = 1 }) {
     const payload = {
       input_sequence: inputSequence,
       export_svg: true,
@@ -790,6 +790,8 @@ class CWClient {
       n: n,
       top_k: topK,
     };
+    const annotationError = await require("./annotations.cjs").prepareAnnotations(this, annotationsFile, payload);
+    if (annotationError) return annotationError;
     if (basePalette !== null) {
       const normalized = validateBasePalette(basePalette);
       if (normalized.error) return normalized.error;
@@ -801,7 +803,7 @@ class CWClient {
       if (basePalette) payload.base_palette = basePalette;
       const error = await prepareAuthoring(this, { authoringFile, userRequest, inputFile, outlineFile, inputSequence, enablePlan, diagramStyle, morphology, diagramType, accentTargets, n, topK }, payload);
       if (error) return error;
-      return this.request("/run", payload);
+      return require("./annotations.cjs").validateAnnotationsResult(await this.request("/run", payload), payload.annotations !== undefined || (payload.authoring?.format === "json" ? Object.hasOwn(payload.authoring.source, "annotations") : /<aside\b|data-annotations\s*=/.test(payload.authoring?.source || "")));
     }
     if (diagramType) {
       if (!["auto", "general", "swimlane"].includes(diagramType)) return this.error("INVALID_DIAGRAM_TYPE", "diagram_type 必须为 auto、general 或 swimlane");
@@ -889,7 +891,7 @@ class CWClient {
       payload.user_request = userRequest;
     }
 
-    if (validateRequestLength && !outlineFile && coDesignRevision === null) {
+    if (validateRequestLength && !outlineFile && coDesignRevision === null && !(sessionId && payload.annotations !== undefined && !payload.user_request)) {
       const minLength = parseInt(process.env.CONTEXTWEAVE_MIN_REQUEST_LENGTH || "50", 10);
       const maxLength = parseInt(process.env.CONTEXTWEAVE_MAX_REQUEST_LENGTH || "5000", 10);
       const reqLength = payload.user_request ? payload.user_request.length : 0;
@@ -949,7 +951,7 @@ class CWClient {
     if (coDesignRevision !== null) payload.co_design_revision = coDesignRevision;
     if (coDesignEditPaths !== null) payload.co_design_edit_paths = coDesignEditPaths;
     if (coDesignUpstreamUsage !== null) payload.co_design_upstream_usage = coDesignUpstreamUsage;
-    const result = await this.request("/run", payload);
+    const result = require("./annotations.cjs").validateAnnotationsResult(await this.request("/run", payload), payload.annotations !== undefined);
     // 打印服务端透传的 lint 软警告（仅提示，不影响成功判定与返回值）
     if (result && Array.isArray(result.warnings) && result.warnings.length > 0) {
       for (const warning of result.warnings) {

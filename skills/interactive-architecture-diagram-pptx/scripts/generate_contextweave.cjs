@@ -85,7 +85,7 @@ async function main(argv = process.argv.slice(2), Client = CWClient) {
   }
 
 
-  if (!userRequest && !inputFile && !authoringFile && !outlineFile && !(sessionId && coDesignRevision !== null)) {
+  if (!userRequest && !inputFile && !authoringFile && !outlineFile && !(sessionId && (coDesignRevision !== null || args["--annotations_file"]))) {
     printJson({
       status: "error",
       error: {
@@ -127,7 +127,7 @@ async function main(argv = process.argv.slice(2), Client = CWClient) {
   }
 
   const client = new Client();
-  const rawResult = await client.runGeneration({
+  const rawResult = await client.runGeneration({ annotationsFile: args["--annotations_file"],
     userRequest,
     inputFile,
     enablePlan,

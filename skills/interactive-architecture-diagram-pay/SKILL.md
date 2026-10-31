@@ -2,7 +2,7 @@
 name: interactive-architecture-diagram-pay
 slug: contextweave-interactive-architecture-pay
 displayName: 架构图一键生成（支付宝付费版）
-version: 1.1.1
+version: 1.1.2
 summary: 通过支付宝 A2M 按次付费，将架构、流程和长文本转换为交互式结构图
 license: MIT
 description: 使用 ContextWeave 生成或修改架构图、流程图、思维导图和复杂信息图，并通过支付宝 AI 按量付费（A2M / HTTP 402）完成单次调用支付。适用于需要从代码、文件或自然语言中提取结构与关系并实际产出 CW、SVG、HTML 或可编辑 PPTX 的付费绘图请求；未特别说明时，PPTX 使用原生形状与连接器导出。不适用于统计图表、手绘插画或像素级排版。
@@ -16,6 +16,10 @@ HTML 与 SVG 分别保存；未通过完整验收的可用预览也保留 HTML�
 本 Skill 是 ContextWeave 的付费绘图请求客户端：把用户需求整理成自包含的绘图意图，通过本地脚本、ContextWeave 云端后端与支付宝官方支付组件协同生成结果。绘图会话由后端托管；支付账单与履约状态只在当前工作区的受保护状态目录中短期保存。
 
 常见触发语包括：“画图”“画个架构图”“生成流程图”“画个思维导图”“生成 CW 图”“可视化这段代码”。
+
+## 结构化备注
+
+需要旁注、补充说明或待确认事项时，读取 [结构化备注](references/annotations.md)，使用 annotations 或 --annotations_file；不要把备注排成普通业务容器。真实步骤、判断条件和关系仍保留在主图。只修改备注时使用备注专用编辑调用，保留主图布局与原验收状态。
 
 ## 配色选择与提交前核对
 
@@ -141,21 +145,24 @@ node scripts/contextweave_paid.mjs probe --input_file "<绝对路径>" --output_
 
 - `complete` 成功后保存 `<output_name>.cw`，并下载 SVG/HTML 产物。完整状态机、安装边界和异常处理见 [支付宝 A2M 支付流程](references/payment-flow.md)。
 
-### 6. 按固定格式回复
+### 6. 面向用户交付
 
-支付确认与等待授权的中间轮次使用简短自然语言；最终成功或失败回复必须是单个 JSON 对象，不能附加 Markdown、标题或解释。字段顺序固定为 `script`、`input_file`、`status`、`session_id`、`result`、`error`；`status` 只能是 `ok` 或 `error`。
+脚本的 JSON 是机器回执，Agent 读取后用简短自然语言向用户交付。默认提供真实可打开的 HTML／所需文件链接和必要的读图说明；只有用户明确要求机器格式时才展示 JSON。不要回显整份回执、内部脚本参数、空字段或空链接。
 
-成功模板：
+- 已验收：说明已生成，提供图入口并简述核心内容。
+- 可查看草稿：先提供真实草稿入口，明确“未通过完整验收”及具体剩余问题；保留可用的导出和编辑能力，不改称正式图。
+- 没有可用产物：简述实际失败原因与下一步；不伪造链接、session_id 或成功状态。
+- 多图：按视图名称列出实际入口和各自状态；共用交互页时提供一个入口并说明可切换的视图。
+- 返还次数、导出成功等事实只依据真实回执。完整回执和恢复 ID 保留在工具结果／本地记录，不要求用户处理内部字段。
 
-```json
-{"script":"contextweave_paid.mjs","input_file":"/abs/path/request_xxx.md","status":"ok","session_id":"<session_id>","result":{"run_id":"<run_id>","svg_url":"<svg_url>"},"error":null}
-```
+示例（链接必须替换为本次真实产物，不照抄占位链接）：
 
-失败模板：
+> 已生成架构图。[打开交互图](实际HTML路径)。主链路是申请、校验和业务放行。
 
-```json
-{"script":"contextweave_paid.mjs","input_file":"/abs/path/request_xxx.md","status":"error","session_id":null,"result":null,"error":{"code":"EXECUTION_NOT_PERFORMED","message":"未完成落盘、支付流程或脚本执行"}}
-```
+> 两张讨论稿已保存：[打开交互图](实际HTML路径)，可切换组件图与流程图。关系证据和局部布局尚未通过完整验收，请暂作为讨论稿使用。
+
+> 本次未生成可查看的图，原因是输入中的关系端点不存在。需要修正该端点后重试。
+
 
 ## 三、核心参数：先理解再映射
 
@@ -326,7 +333,7 @@ node scripts/contextweave_paid.mjs probe --input_file "<绝对路径>" --output_
 - [ ] 已简要说明本任务的外发数据类别与用途并获得授权；新增敏感类别时已补充确认。
 - [ ] 已从 A2M 签名账单读取真实金额并向用户展示；付款前已取得本次明确确认。
 - [ ] 支付、查询与履约复用同一个 `state_dir`；未自动重复 `pay`，履约确认具备幂等恢复路径。
-- [ ] 已真正落盘并执行付费脚本，最终回复是合法的单个 JSON 对象。
+- [ ] 已真正落盘并执行付费脚本，已解析机器回执，并向用户提供可读说明、真实产物入口和准确的质量状态。
 
 ## 九、常见问题（FAQ）
 

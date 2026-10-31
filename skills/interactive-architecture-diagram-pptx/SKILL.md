@@ -2,7 +2,7 @@
 name: interactive-architecture-diagram-pptx
 slug: contextweave-interactive-architecture-pptx
 displayName: 架构图一键生成（PPTX 简化版）
-version: 1.7.2
+version: 1.8.0
 summary: 将架构、流程和长文本转换为结构图，默认且仅导出原生可编辑 PPTX
 license: MIT
 description: 使用 ContextWeave 生成或修改架构图、流程图、思维导图和复杂信息图，并以原生形状与连接器导出为可编辑 PPTX。适用于需要从代码、文件或自然语言中提取结构与关系并产出 PPTX 的请求。不适用于统计图表、手绘插画、像素级排版，或需要 SVG/HTML/CW 代码等其他导出格式的场景。
@@ -14,6 +14,10 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] } } }
 本 Skill 是 ContextWeave 的绘图请求客户端：把用户需求整理成自包含的绘图意图，通过本地脚本与云端后端协同生成结果，**默认且仅导出原生可编辑 PPTX**，不导出 SVG、HTML 或 CW 代码。客户端本身无状态，会话状态由后端托管。
 
 常见触发语包括：“画图”“画个架构图”“生成流程图”“画个思维导图”“可视化这段代码”“生成 PPT”。
+
+## 结构化备注
+
+需要旁注、补充说明或待确认事项时，读取 [结构化备注](references/annotations.md)，使用 annotations 或 --annotations_file；不要把备注排成普通业务容器。真实步骤、判断条件和关系仍保留在主图。只修改备注时使用备注专用编辑调用，保留主图布局与原验收状态。
 
 ## 结构化生成优先路由
 
@@ -111,21 +115,24 @@ node scripts/generate_contextweave.cjs --input_file "<绝对路径>" --output_na
 node scripts/edit_contextweave.cjs --session_id "<session_id>" --input_file "<绝对路径>" --output_name "<语义化英文名>" --output_dir "docs/diagrams"
 ```
 
-### 6. 按固定格式回复
+### 6. 面向用户交付
 
-最终回复必须是单个 JSON 对象，不能附加 Markdown、标题或解释。字段顺序固定为 `script`、`input_file`、`status`、`session_id`、`result`、`error`；`status` 只能是 `ok` 或 `error`。
+脚本的 JSON 是机器回执，Agent 读取后用简短自然语言向用户交付。默认提供真实可打开的 HTML／所需文件链接和必要的读图说明；只有用户明确要求机器格式时才展示 JSON。不要回显整份回执、内部脚本参数、空字段或空链接。
 
-成功模板：
+- 已验收：说明已生成，提供图入口并简述核心内容。
+- 可查看草稿：先提供真实草稿入口，明确“未通过完整验收”及具体剩余问题；保留可用的导出和编辑能力，不改称正式图。
+- 没有可用产物：简述实际失败原因与下一步；不伪造链接、session_id 或成功状态。
+- 多图：按视图名称列出实际入口和各自状态；共用交互页时提供一个入口并说明可切换的视图。
+- 返还次数、导出成功等事实只依据真实回执。完整回执和恢复 ID 保留在工具结果／本地记录，不要求用户处理内部字段。
 
-```json
-{"script":"generate_contextweave.cjs","input_file":"/abs/path/request_xxx.md","status":"ok","session_id":"<session_id>","result":{"saved_pptx_file":"/abs/path/docs/diagrams/order_payment_flow.pptx"},"error":null}
-```
+示例（链接必须替换为本次真实产物，不照抄占位链接）：
 
-失败模板：
+> 已生成架构图。[打开交互图](实际HTML路径)。主链路是申请、校验和业务放行。
 
-```json
-{"script":"generate_contextweave.cjs","input_file":"/abs/path/request_xxx.md","status":"error","session_id":null,"result":null,"error":{"code":"EXECUTION_NOT_PERFORMED","message":"未完成落盘或未执行脚本"}}
-```
+> 两张讨论稿已保存：[打开交互图](实际HTML路径)，可切换组件图与流程图。关系证据和局部布局尚未通过完整验收，请暂作为讨论稿使用。
+
+> 本次未生成可查看的图，原因是输入中的关系端点不存在。需要修正该端点后重试。
+
 
 ## 三、核心参数：先理解再映射
 
@@ -267,7 +274,7 @@ node "<当前 Skill 根目录>/scripts/update_skill.cjs" --dry-run
 - [ ] 普通路径的 `--diagram_style` 与 `--morphology` 已按用户意图显式设置；结构化路径只提交 authoring。
 - [ ] 配色要求已对应到实际整体参数或高亮对象；普通新建明确选择色板或默认，复合主题不丢第二色／背景，已有图继承。
 - [ ] 已简要说明本任务的外发数据类别与用途并获得授权；新增敏感类别时已补充确认。
-- [ ] 已真正落盘并执行脚本，最终回复是合法的单个 JSON 对象。
+- [ ] 已真正落盘并执行脚本，已解析机器回执，并向用户提供可读说明、真实产物入口和准确的质量状态。
 - [ ] 交付产物仅为 PPTX 文件，未提供 SVG、HTML 或 CW 代码。
 
 

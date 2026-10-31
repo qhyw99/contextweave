@@ -39,4 +39,7 @@ node scripts/export_contextweave_code.cjs --session_id "<session_id>" --format a
 
 脚本把展开的 CW 保存在文件中而不打印到模型上下文；PPTX 变体仅保存业务模型和 PPTX，保持其导出范围。渲染成功后后端才更新会话，失败时保留旧图。
 
-外部数据传输沿用本任务已有授权和当前变体的调用入口。付费版仍通过 `contextweave_paid.mjs probe` 转发 `--authoring_file`，编辑时同时传 `--session_id`，保持原支付流程。最终回复沿用当前变体的格式，`input_file` 填实际提交的结构文件路径，并在 `result` 中保留 `saved_authoring_file`。
+外部数据传输沿用本任务已有授权和当前变体的调用入口。付费版仍通过 `contextweave_paid.mjs probe` 转发 `--authoring_file`，编辑时同时传 `--session_id`，保持原支付流程。脚本保留实际输入路径及 saved_authoring_file 机器字段；最终向用户使用自然语言说明状态并提供产物链接，不复述机器 JSON。
+
+
+图级备注通过根 annotations 或 main 下的 aside 输入，完整协议见[结构化备注](annotations.md)。省略保留，显式空列表清空；备注不进入主图布局和关系校验。

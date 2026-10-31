@@ -53,14 +53,14 @@ async function main(argv = process.argv.slice(2), Client = CWClient) {
   const outputName = args["--output_name"] || args["-n"];
   const outputDir = args["--output_dir"] || args["-o"];
 
-  if (!sessionId || (!inputFile && !authoringFile)) {
+  if (!sessionId || (!inputFile && !authoringFile && !args["--annotations_file"])) {
     printJson({
       status: "error",
       error: {
         code: "MISSING_REQUIRED_ARGS",
-        message: "必须提供 session_id，以及 authoring_file 或 input_file",
+        message: "必须提供 session_id，以及 authoring_file、input_file 或 annotations_file",
         recoverable: true,
-        recovery_hint: "补充 input_file 参数后重试",
+        recovery_hint: "补充输入文件或备注文件参数后重试",
       },
     });
     process.exit(1);
@@ -82,7 +82,7 @@ async function main(argv = process.argv.slice(2), Client = CWClient) {
     return originalRequest(endpoint, payload, options);
   };
 
-  const rawResult = await client.runGeneration({ inputFile, authoringFile, sessionId, basePalette });
+  const rawResult = await client.runGeneration({ annotationsFile: args["--annotations_file"], inputFile, authoringFile, sessionId, basePalette });
   const result = normalizeEditResult(authoringFile ? validateAuthoringResult(rawResult, "svg") : rawResult, Boolean(authoringFile));
   await saveAuthoringArtifacts(client, result, { outputName, outputDir, saveSource: true });
 
