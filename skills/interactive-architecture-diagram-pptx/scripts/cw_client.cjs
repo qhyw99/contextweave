@@ -496,6 +496,7 @@ class CWClient {
   validateBaseUrl() {
     try {
       const url = new URL(this.baseUrl);
+      if (process.env.CW_ALLOW_LOCALHOST === "1" && ["127.0.0.1", "localhost"].includes(url.hostname)) return null;
       if (url.hostname !== "pptx.chenxitech.site") {
         return this.error("INVALID_DOMAIN", "Only pptx.chenxitech.site domain is allowed");
       }
@@ -760,6 +761,10 @@ class CWClient {
     return this.handleResponse({ statusCode: response.statusCode, statusMessage: response.statusMessage, body: await readBody(response) });
   }
 
+  async getCoDesignBudget(sessionId) {
+    return this.request("/session/budget", { session_id: sessionId });
+  }
+
   async getCapabilities() {
     const baseUrlError = this.validateBaseUrl();
     if (baseUrlError) return baseUrlError;
@@ -771,7 +776,9 @@ class CWClient {
     }
   }
 
-  async runGeneration({ userRequest, annotationsFile = null, enablePlan = false, inputSequence = null, diagramType = null, outlineFile = null, coDesignRevision = null, coDesignEditPaths = null, coDesignUpstreamUsage = null, authoringFile = null, inputFile = null, sessionId = null, validateRequestLength = false, diagramStyle = null, morphology = null, accentTargets = null, basePalette = null, useDefaultPalette = false, n = 1, topK = 1 }) {
+  async runGeneration({ userRequest, annotationsFile = null, enablePlan = false, inputSequence = null, diagramType = null, outlineFile = null, coDesignRevision = null, coDesignEditPaths = null, coDesignUpstreamUsage = null, authoringFile = null, templateScenario = null, inputFile = null, cwSourceFile = null, sessionId = null, validateRequestLength = false, diagramStyle = null, morphology = null, accentTargets = null, basePalette = null, useDefaultPalette = false, n = 1, topK = 1, tokenLimit = null }) {
+    if (templateScenario != null && !authoringFile) return this.error("TEMPLATE_SCENARIO_INPUT_REQUIRED", "template_scenario 需要待校验的 authoring_file");
+    if (authoringFile && cwSourceFile) return this.error("AUTHORING_OPTION_CONFLICT", "authoring_file 不能与 cw_source_file 同时使用");
     const payload = {
       // 简化版：仅导出原生 PPTX，不导出 SVG/HTML
       export_svg: false,
@@ -781,8 +788,7 @@ class CWClient {
       n: n,
       top_k: topK,
     };
-    const annotationError = await require("./annotations.cjs").prepareAnnotations(this, annotationsFile, payload);
-    if (annotationError) return annotationError;
+    if (tokenLimit !== null) payload.token_limit = tokenLimit;
     if (basePalette !== null) {
       const normalized = validateBasePalette(basePalette);
       if (normalized.error) return normalized.error;
@@ -791,8 +797,10 @@ class CWClient {
     if (authoringFile && useDefaultPalette) return this.error("PALETTE_UNSUPPORTED", "--use_default_palette 只用于普通新建；authoring 使用模型或预设配色");
     if (authoringFile && basePalette?.version) return validatePaletteCapability(null, basePalette, "authoring");
     if (authoringFile) {
+      const annotationError = await require("./annotations.cjs").prepareAnnotations(this, annotationsFile, payload);
+      if (annotationError) return annotationError;
       if (basePalette) payload.base_palette = basePalette;
-      const error = await prepareAuthoring(this, { authoringFile, userRequest, inputFile, outlineFile, inputSequence, enablePlan, diagramStyle, morphology, diagramType, accentTargets, n, topK }, payload);
+      const error = await prepareAuthoring(this, { authoringFile, templateScenario, userRequest, inputFile, outlineFile, inputSequence, enablePlan, diagramStyle, morphology, diagramType, accentTargets, n, topK }, payload);
       if (error) return error;
       return require("./annotations.cjs").validateAnnotationsResult(await this.request("/run", payload), payload.annotations !== undefined || (payload.authoring?.format === "json" ? Object.hasOwn(payload.authoring.source, "annotations") : /<aside\b|data-annotations\s*=/.test(payload.authoring?.source || "")));
     }
@@ -820,6 +828,12 @@ class CWClient {
     if (process.env.CONTEXTWEAVE_ENABLE_PLAN === "true") {
       payload.enable_plan = true;
     }
+    let exactCwCode = null;
+    if (cwSourceFile) {
+      const source = require("./source_input.cjs").readExactCwSource(this, cwSourceFile);
+      if (source.error) return source.error;
+      exactCwCode = source.source;
+    }
     if (inputFile) {
       const pathError = this.validateSafePath(inputFile);
       if (pathError) {
@@ -830,38 +844,21 @@ class CWClient {
       }
       try {
         const content = fs.readFileSync(inputFile, "utf8");
-        let reqText = content.trim();
-        let cwText = "";
-        if (content.includes("# CW")) {
-          const parts = content.split("# CW");
-          const reqPart = parts[0];
-          const cwPart = parts.slice(1).join("# CW");
-          const afterFenceIndex = cwPart.indexOf("```cw");
-          if (afterFenceIndex !== -1) {
-            const afterFence = cwPart.substring(afterFenceIndex + 5);
-            const lastFenceIndex = afterFence.lastIndexOf("```");
-            if (lastFenceIndex !== -1) {
-              cwText = afterFence.substring(0, lastFenceIndex).trim();
-            } else {
-              cwText = afterFence.trim();
-            }
-          } else {
-            cwText = cwPart.trim();
-          }
-          if (reqPart.includes("# Request")) {
-            reqText = reqPart.split("# Request")[1].trim();
-          } else {
-            reqText = reqPart.trim();
-          }
+        const parsed = require("./source_input.cjs").parseGenerationInput(content);
+        if (exactCwCode !== null && parsed.hasCwSource) {
+          return this.error("CW_SOURCE_CONFLICT", "input_file 与 cw_source_file 不能同时提供 CW 源；未提交请求");
         }
-        payload.user_request = reqText;
-        payload.initial_cw_code = cwText;
+        payload.user_request = parsed.userRequest;
+        payload.initial_cw_code = exactCwCode !== null ? exactCwCode : parsed.initialCwCode;
       } catch (error) {
-        return this.error("READ_ERROR", `Failed to read input file: ${String(error.message || error)}`);
+        return this.error(error.code || "READ_ERROR", `Failed to read input file: ${String(error.message || error)}`);
       }
     } else {
       payload.user_request = userRequest;
+      if (exactCwCode !== null) payload.initial_cw_code = exactCwCode;
     }
+    const annotationError = await require("./annotations.cjs").prepareAnnotations(this, annotationsFile, payload);
+    if (annotationError) return annotationError;
 
     if (validateRequestLength && !outlineFile && coDesignRevision === null && !(sessionId && payload.annotations !== undefined && !payload.user_request)) {
       const minLength = parseInt(process.env.CONTEXTWEAVE_MIN_REQUEST_LENGTH || "50", 10);

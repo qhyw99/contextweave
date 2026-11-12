@@ -8,11 +8,17 @@
 
 ## 修改普通图
 
-从上一轮返回 JSON 中取得 `session_id` 并复用。把当前 CW 全文放入请求文件的 `# CW` 代码块；不要只写“基于上一张图修改”。
+从上一轮返回 JSON 中取得 `session_id` 并复用。优先把交付的 `.cw` 文件作为精确源直接提交，修改意图独立传入；不要只写“基于上一张图修改”，也不要手工补删尾换行：
 
-若本任务此前只授权了普通生成，修改前按 [外部数据传输与授权](external-data-consent.md) 补充说明会发送完整 `initial_cw_code` 并确认一次；已覆盖该类别时不重复询问。
+```bash
+node scripts/edit_contextweave.cjs --session_id "<session_id>" --cw_source_file "<当前工作区内 CW 绝对路径>" --user_request "<修改意图>"
+```
 
-使用 `edit_contextweave.cjs` 按 `session_id` 提交修改意图。客户端本身无状态，因此旧图上下文必须随请求明确提供。
+`--cw_source_file` 必须是工作区内合法 UTF-8 普通文件，CRLF、Unicode、首尾空白和尾换行均逐字节保留。它与 `--authoring_file` 互斥；若 `input_file` 已含 `# CW`，不能再同时提供第二份源。
+
+旧 `# Request` / `# CW` 文件仍可兼容使用。开围栏行终止符属于包装，正文保留到独立闭围栏行起点；闭围栏长度不得短于开围栏。无闭围栏、多份 CW 或闭围栏后存在其他正文会明确拒绝且零请求。Markdown 无法无歧义表达“无尾换行”时，必须使用 `--cw_source_file`。
+
+若本任务此前只授权了普通生成，修改前按 [外部数据传输与授权](external-data-consent.md) 补充说明会发送完整 `initial_cw_code` 并确认一次；已覆盖该类别时不重复询问。客户端本身无状态，因此旧图上下文必须随请求明确提供。
 
 ## 导入现成 CW
 

@@ -73,6 +73,7 @@ async function main(argv = process.argv.slice(2), Client = CWClient) {
   if (authoringError) { printJson(authoringError); process.exit(1); }
   const userRequest = args["--user_request"] || args["-u"];
   const inputFile = args["--input_file"] || args["-i"];
+  const cwSourceFile = args["--cw_source_file"];
   const enablePlan = args["--enable_plan"] === "true";
   const outlineFile = args["--outline_file"];
   const authoringFile = args["--authoring_file"];
@@ -101,7 +102,7 @@ async function main(argv = process.argv.slice(2), Client = CWClient) {
   }
 
 
-  if (!userRequest && !inputFile && !authoringFile && !outlineFile && !(sessionId && (coDesignRevision !== null || args["--annotations_file"]))) {
+  if (!userRequest && !inputFile && !cwSourceFile && !authoringFile && !outlineFile && !(sessionId && (coDesignRevision !== null || args["--annotations_file"]))) {
     printJson({
       status: "error",
       error: {
@@ -146,10 +147,12 @@ async function main(argv = process.argv.slice(2), Client = CWClient) {
   const rawResult = await client.runGeneration({ annotationsFile: args["--annotations_file"],
     userRequest,
     inputFile,
+    cwSourceFile,
     enablePlan,
     outlineFile,
     diagramType,
     authoringFile,
+    templateScenario: args["--template_scenario"],
     sessionId,
     inputSequence,
     validateRequestLength: true,

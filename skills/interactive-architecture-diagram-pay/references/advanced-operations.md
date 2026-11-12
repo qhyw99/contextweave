@@ -8,11 +8,13 @@
 
 ## 修改普通图
 
-从上一轮返回 JSON 中取得 `session_id` 并复用。把当前 CW 全文放入请求文件的 `# CW` 代码块；不要只写“基于上一张图修改”。
+从上一轮返回 JSON 中取得 `session_id` 并复用。优先将交付的 `.cw` 文件通过 `--cw_source_file "<当前工作区内 CW 绝对路径>"` 提交，并用 `--user_request "<修改意图>"` 独立表达修改；该参数保留合法 UTF-8 的 CRLF、Unicode、首尾空白和尾换行，不要手工补删尾换行。它与 `--authoring_file` 互斥，也不能与 `input_file` 中的第二份 `# CW` 同时使用。
+
+旧 `# Request` / `# CW` 围栏仍可兼容使用，正文保留到独立闭围栏行起点，较短围栏不会提前截断。无闭围栏、多份 CW 或闭围栏后存在其他正文会明确拒绝且零请求；无尾换行等 Markdown 难以无歧义表达的情况必须使用 `--cw_source_file`。
 
 若本任务此前只授权了普通生成，修改前按 [外部数据传输与授权](external-data-consent.md) 补充说明会发送完整 `initial_cw_code` 并确认一次；已覆盖该类别时不重复询问。
 
-AI 修改同样按次收费。把 `session_id`、完整 `# CW` 和修改意图写入请求文件后，仍使用 `contextweave_paid.mjs probe`，完成本次 `0.05 CNY` 账单、确认和支付；不得直接调用 `edit_contextweave.cjs` 绕过支付门。客户端本身无状态，因此旧图上下文必须随请求明确提供。
+AI 修改同样按次收费。把 `session_id`、精确源参数和修改意图交给 `contextweave_paid.mjs probe`，完成本次 `0.05 CNY` 账单、确认和支付；不得直接调用 `edit_contextweave.cjs` 绕过支付门。客户端本身无状态，因此旧图上下文必须随请求明确提供。
 
 ## 导入现成 CW
 

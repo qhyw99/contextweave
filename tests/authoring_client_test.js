@@ -34,6 +34,44 @@ after(async () => {
 for (const variant of variants) {
   const folder = path.join(root, "skills", variant, "scripts");
   const { CWClient } = require(path.join(folder, "cw_client.cjs"));
+  test(`${variant}: inferred matrix is limited to the registered business overview`, async () => {
+    const client = new CWClient();
+    const calls = [];
+    client.getCapabilities = async () => capabilities;
+    client.request = async (endpoint, payload) => { calls.push(payload); return { status: "ok" }; };
+    const doc = { kind: "matrix", title: "事业运行", rows: 3, columns: [
+      { title: "内容运营", cells: [{ id: "content", title: "内容组", span: 2, items: ["采编", "校订"] }, "分发"] },
+      { title: "内部服务", cells: [{ id: "archive", title: "档案" }, "合同", "财务"] },
+      { title: "技术支撑", cells: [{ title: "系统与工具", span: 3 }] },
+    ] };
+    const filename = path.join(temporary, variant + "-scope.json");
+    const scoped = { authoringFile: filename, templateScenario: "business_partition_overview" };
+    fs.writeFileSync(filename, JSON.stringify(doc));
+    assert.equal((await client.runGeneration(scoped)).status, "ok");
+    assert.deepEqual(calls[0].authoring.source, doc);
+    assert.equal((await client.runGeneration({ ...scoped, templateScenario: "future_category" })).error.code, "TEMPLATE_SCENARIO_OUT_OF_SCOPE");
+    assert.equal((await client.runGeneration({ templateScenario: scoped.templateScenario })).error.code, "TEMPLATE_SCENARIO_INPUT_REQUIRED");
+
+    const comparison = { kind: "matrix", title: "企业运行全景：甲乙比较矩阵", rows: 2, columns: [
+      { title: "甲", cells: [{ title: "快", items: ["读", "写"] }, "十元"] },
+      { title: "乙", cells: ["慢", "八元"] },
+    ] };
+    const flat = structuredClone(doc);
+    delete flat.columns[0].cells[0].items;
+    const withEdges = { ...doc, edges: [{ from: "content", to: "archive", label: "迁移" }] };
+    for (const rejected of [comparison, flat, withEdges]) {
+      fs.writeFileSync(filename, JSON.stringify(rejected));
+      assert.equal((await client.runGeneration(scoped)).error.code, "TEMPLATE_SCENARIO_OUT_OF_SCOPE");
+    }
+    assert.equal(calls.length, 1);
+    const cli = spawnSync(process.execPath, [path.join(folder, "generate_contextweave.cjs"),
+      "--authoring_file", filename, "--template_scenario", "future_category"], { encoding: "utf8", cwd: root });
+    assert.equal(cli.status, 1);
+    assert.equal(JSON.parse(cli.stdout).error.code, "TEMPLATE_SCENARIO_OUT_OF_SCOPE");
+    fs.writeFileSync(filename, JSON.stringify(comparison));
+    assert.equal((await client.runGeneration({ authoringFile: filename })).status, "ok");
+    assert.deepEqual(calls[1].authoring.source, comparison);
+  });
   test(`${variant}: JSON/HTML compile payload preserves transport and export defaults`, async () => {
     const client = new CWClient();
     let checks = 0;

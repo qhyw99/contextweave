@@ -7,6 +7,43 @@ function failure(code, message) {
   return { status: "error", error: { code, message, recoverable: true } };
 }
 
+// The Skill selects a scenario from the original reading question. Geometry
+// can disqualify its proposed model, but cannot select a scenario by itself.
+function businessPartitionOverview(model) {
+  if (model.kind !== "matrix" || (model.template && model.template !== "shared-tracks")
+      || !Array.isArray(model.columns) || model.columns.length < 2 || model.edges?.length) return false;
+  const rows = Array.isArray(model.rows) ? model.rows.length : model.rows;
+  if (!Number.isSafeInteger(rows) || rows < 2) return false;
+  const divisions = new Set();
+  let hasGroup = false;
+  for (const column of model.columns) {
+    if (!Array.isArray(column?.cells) || !column.cells.length) return false;
+    let cursor = 1;
+    const intervals = [];
+    for (const cell of column.cells) {
+      const start = cell?.start ?? cursor;
+      const span = cell?.span ?? 1;
+      if (!Number.isSafeInteger(start) || !Number.isSafeInteger(span) || start < 1 || span < 1) return false;
+      cursor = start + span;
+      intervals.push([start, cursor]);
+      if (Array.isArray(cell?.items) && cell.items.length >= 2) hasGroup = true;
+    }
+    intervals.sort((a, b) => a[0] - b[0]);
+    let next = 1;
+    for (const [start, end] of intervals) {
+      if (start !== next) return false;
+      next = end;
+    }
+    if (next !== rows + 1) return false;
+    divisions.add(intervals.map(([, end]) => end).join(","));
+  }
+  return hasGroup && divisions.size > 1;
+}
+
+const templateScenarios = new Map([
+  ["business_partition_overview", businessPartitionOverview],
+]);
+
 function validatePresentation(capabilities, palette, route, document, sessionId) {
   const embedded = document?.presentation_preset;
   const name = palette?.style_preset || embedded;
@@ -41,11 +78,27 @@ function validatePresentation(capabilities, palette, route, document, sessionId)
 
 function validateAuthoringArgs(args) {
   if (!args["--authoring_file"]) return null;
-  const conflicts = ["--user_request", "-u", "--input_file", "-i", "--outline_file", "--input_sequence", "--diagram_style", "-d", "--morphology", "-m", "--diagram_type", "--accent_targets"];
+  const conflicts = ["--user_request", "-u", "--input_file", "-i", "--cw_source_file", "--outline_file", "--input_sequence", "--diagram_style", "-d", "--morphology", "-m", "--diagram_type", "--accent_targets"];
   const present = conflicts.filter(key => Object.hasOwn(args, key));
   if (args["--enable_plan"] === "true") present.push("--enable_plan");
   for (const key of ["--n", "--top_k"]) if (args[key] !== undefined && Number(args[key]) !== 1) present.push(key);
   return present.length ? failure("AUTHORING_OPTION_CONFLICT", `authoring_file 不能与 ${present.join("、")} 同时使用`) : null;
+}
+
+function authoringEnvelope(value, format = "json") {
+  if (format === "json" && value && typeof value === "object" && (Object.hasOwn(value, "format") || Object.hasOwn(value, "source"))) {
+    if (value.version !== 1 || !["json", "html"].includes(value.format) ||
+        Object.keys(value).some(key => !["version", "format", "source"].includes(key))) {
+      return failure("INVALID_AUTHORING_ENVELOPE", "authoring 信封需要 version:1、format 和 source");
+    }
+    format = value.format;
+    value = value.source;
+  }
+  if (format === "json" ? (!value || typeof value !== "object" || Array.isArray(value) || Object.hasOwn(value, "source") || Object.hasOwn(value, "format")) :
+      (typeof value !== "string" || !value.trim())) {
+    return failure("INVALID_AUTHORING_SOURCE", "JSON source 须为单个模型对象；HTML source 须为非空字符串");
+  }
+  return { version: 1, format, source: value };
 }
 
 function readAuthoringFile(filename) {
@@ -64,10 +117,7 @@ function readAuthoringFile(filename) {
     const format = extension === ".json" ? "json" : "html";
     const text = fs.readFileSync(resolved, "utf8").replace(/^\uFEFF/, "");
     const source = format === "json" ? JSON.parse(text) : text;
-    if (!source || (format === "json" && (typeof source !== "object" || Array.isArray(source)))) {
-      return failure("INVALID_AUTHORING_SOURCE", "JSON 须为结构对象；HTML 不能为空");
-    }
-    return { version: 1, format, source };
+    return authoringEnvelope(source, format);
   } catch (error) {
     return failure(error instanceof SyntaxError ? "INVALID_AUTHORING_JSON" : "AUTHORING_FILE_READ_ERROR", String(error.message || error));
   }
@@ -80,6 +130,12 @@ async function prepareAuthoring(client, options, payload) {
   }
   const authoring = readAuthoringFile(authoringFile);
   if (authoring.status === "error") return authoring;
+  if (options.templateScenario != null) {
+    const matches = templateScenarios.get(options.templateScenario);
+    if (authoring.format !== "json" || !matches?.(authoring.source)) {
+      return failure("TEMPLATE_SCENARIO_OUT_OF_SCOPE", "该模板提案未匹配已登记场景。请将原文和展示要求交给普通生成 --diagram_type general。");
+    }
+  }
   const capabilities = await client.getCapabilities();
   if (capabilities?.status === "error") return capabilities;
   const hasAnnotations = authoring.format === "json" ? Object.hasOwn(authoring.source, "annotations") : /<aside\b|data-annotations\s*=/.test(authoring.source);
@@ -143,4 +199,4 @@ function saveExportedModel(result, directory) {
   return { saved_authoring_file: filename };
 }
 
-module.exports = { MAX_AUTHORING_BYTES, validatePresentation, validateAuthoringArgs, readAuthoringFile, prepareAuthoring, validateAuthoringResult, saveAuthoringArtifacts, saveExportedModel };
+module.exports = { MAX_AUTHORING_BYTES, validatePresentation, validateAuthoringArgs, authoringEnvelope, readAuthoringFile, prepareAuthoring, validateAuthoringResult, saveAuthoringArtifacts, saveExportedModel };

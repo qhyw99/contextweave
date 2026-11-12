@@ -48,12 +48,14 @@ async function main(argv = process.argv.slice(2), Client = CWClient) {
   const authoringError = validateAuthoringArgs(args);
   if (authoringError) { printJson(authoringError); process.exit(1); }
   const sessionId = args["--session_id"] || args["-s"];
+  const userRequest = args["--user_request"] || args["-u"];
   const inputFile = args["--input_file"] || args["-i"];
+  const cwSourceFile = args["--cw_source_file"];
   const authoringFile = args["--authoring_file"];
   const outputName = args["--output_name"] || args["-n"];
   const outputDir = args["--output_dir"] || args["-o"];
 
-  if (!sessionId || (!inputFile && !authoringFile && !args["--annotations_file"])) {
+  if (!sessionId || (!inputFile && !cwSourceFile && !authoringFile && !args["--annotations_file"])) {
     printJson({
       status: "error",
       error: {
@@ -82,7 +84,7 @@ async function main(argv = process.argv.slice(2), Client = CWClient) {
     return originalRequest(endpoint, payload, options);
   };
 
-  const rawResult = await client.runGeneration({ annotationsFile: args["--annotations_file"], inputFile, authoringFile, sessionId, basePalette });
+  const rawResult = await client.runGeneration({ annotationsFile: args["--annotations_file"], userRequest, inputFile, cwSourceFile, authoringFile, sessionId, basePalette });
   const result = normalizeEditResult(authoringFile ? validateAuthoringResult(rawResult, "svg") : rawResult, Boolean(authoringFile));
   await saveAuthoringArtifacts(client, result, { outputName, outputDir, saveSource: true });
 

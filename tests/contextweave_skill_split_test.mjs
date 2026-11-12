@@ -19,6 +19,9 @@ const synchronizedFiles = [
   "scripts/export_contextweave_code.cjs",
   "scripts/export_session_asset.cjs",
   "scripts/generate_contextweave.cjs",
+  "scripts/generate_presentation_plan.cjs",
+  "scripts/generate_view_group.cjs",
+  "scripts/view_group.cjs",
   "scripts/import_contextweave_code.cjs",
   "scripts/recompile_contextweave.cjs",
   "scripts/submit_feedback.cjs",
@@ -28,6 +31,14 @@ for (const relativePath of synchronizedFiles) {
   const freeContent = fs.readFileSync(path.join(freeRoot, relativePath), "utf8");
   const paidContent = fs.readFileSync(path.join(paidRoot, relativePath), "utf8");
   assert.equal(paidContent.replace(/\r\n/g, "\n"), freeContent.replace(/\r\n/g, "\n"), `${relativePath} must remain synchronized`);
+}
+
+for (const variant of ["-pay", "-pptx", "-workbuddy"]) {
+  const root = freeRoot + variant;
+  for (const name of ["generate_view_group", "view_group", "view_evidence", "budget_client", "authoring"]) {
+    const filename = "scripts/" + name + ".cjs";
+    assert.deepEqual(fs.readFileSync(path.join(root, filename)), fs.readFileSync(path.join(freeRoot, filename)), root + "/" + filename);
+  }
 }
 
 const freeFiles = [
@@ -55,7 +66,7 @@ const freeSkill = fs.readFileSync(path.join(freeRoot, "SKILL.md"), "utf8");
 assert.match(paidSkill, /^name: interactive-architecture-diagram-pay$/m);
 assert.match(paidSkill, /^slug: contextweave-interactive-architecture-pay$/m);
 assert.match(paidSkill, /^displayName: 架构图一键生成（支付宝付费版）$/m);
-assert.match(paidSkill, /^version: 1\.0\.0$/m);
+assert.match(paidSkill, /^version: 1\.1\.2$/m);
 assert.match(paidSkill, /每次 AI 生成或 AI 修改固定收费 `0\.05 CNY`/);
 assert.equal(
   markdownSection(paidSkill, "## 一、三条不变式", "## 二、普通单图"),

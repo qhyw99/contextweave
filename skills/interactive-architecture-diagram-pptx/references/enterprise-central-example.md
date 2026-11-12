@@ -2,7 +2,7 @@
 
 这个例子展示多种分区共用行边界的办法。它使用普通 `matrix/shared-tracks`、红金主题和显式 `style_role`；“中车式”仅描述本例的内容组织，不是模板或预设名称。
 
-[可运行的 JSON](enterprise-central-example.json)包含七列、十条公共轨道。先将 JSON 复制到当前工作区，按原文修改内容，再通过 `--authoring_file` 提交。新建时可直接保留正文中的 `presentation_preset`，不用额外传配色；提交前检查后端矩阵主题能力。协议见[共享轨道矩阵](authoring-matrix.md)。
+[可运行的 JSON](enterprise-central-example.json)包含七列、十条公共轨道，可作为已有模型直接编译。要用自己的材料新建图，先按[适用场景](authoring-matrix.md)核对核心业务、配套管控与组内归属，按实际内容分栏。主题可采用正文中的 `presentation_preset`，提交前检查后端矩阵主题能力。
 
 ## 怎样拆分共享轨道
 
