@@ -131,6 +131,7 @@ node scripts/contextweave_paid.mjs probe --input_file "<绝对路径>" --output_
 ```
 
 - `input_file` 必须存在且为绝对路径。
+- 用户要求「交错配图」时传 `--enable_illustrations true`，CW 在连线前将底图、容器图与节点插画绑定到相应对象。新图默认关闭。编辑命令 `edit_contextweave.cjs` 省略此参数即继承；显式传 `--enable_illustrations true` 启用，传 `--enable_illustrations false` 关闭并保留素材缓存。
 - `output_name` 必填，例如 `order_payment_flow`。
 - `user_request` 默认长度为 50-5000 字符，可由 `CONTEXTWEAVE_MIN_REQUEST_LENGTH` / `CONTEXTWEAVE_MAX_REQUEST_LENGTH` 调整。
 - 已确定的呈现逻辑、构图范式和精确配色必须按第三节显式传参。

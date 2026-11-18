@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-const { CWClient, normalizeAssetResult, printJson } = require("./cw_client.cjs");
+const { CWClient, parseIllustrations, normalizeAssetResult, printJson } = require("./cw_client.cjs");
 
 function parseArgs(argv) {
   const args = {};
@@ -40,12 +40,18 @@ function normalizeGenerationResult(result) {
   return result;
 }
 
-async function main() {
-  const args = parseArgs(process.argv.slice(2));
+async function main(argv = process.argv.slice(2), Client = CWClient) {
+  const args = parseArgs(argv);
   const userRequest = args["--user_request"] || args["-u"];
   const inputFile = args["--input_file"] || args["-i"];
   const sessionId = args["--session_id"] || args["-s"];
   const inputSequenceRaw = args["--input_sequence"];
+  const { value: enableIllustrations, error: illustrationError } = parseIllustrations(argv);
+  if (illustrationError) {
+    printJson(illustrationError);
+    process.exitCode = 1;
+    return;
+  }
   const enablePlan = args["--enable_plan"] === "true";
 
   if (!userRequest && !inputFile) {
@@ -79,7 +85,7 @@ async function main() {
     }
   }
 
-  const client = new CWClient();
+  const client = new Client();
   const result = normalizeGenerationResult(
     await client.runGeneration({
       userRequest,
@@ -88,6 +94,7 @@ async function main() {
       inputSequence,
       validateRequestLength: true,
       enablePlan,
+      enableIllustrations,
     })
   );
 
@@ -110,4 +117,5 @@ async function main() {
   }
 }
 
-main();
+module.exports = { main };
+if (require.main === module) main();

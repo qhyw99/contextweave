@@ -184,7 +184,7 @@ class CWClient {
     });
   }
 
-  async runGeneration({ userRequest, inputFile = null, sessionId = null, inputSequence = null, validateRequestLength = false, enablePlan = false }) {
+  async runGeneration({ userRequest, inputFile = null, sessionId = null, inputSequence = null, validateRequestLength = false, enableIllustrations = null, enablePlan = false }) {
     const payload = {
       input_sequence: inputSequence,
       export_svg: true,
@@ -192,7 +192,11 @@ class CWClient {
       session_id: sessionId,
       test_file: null,
     };
-    
+
+    if (enableIllustrations !== null) {
+      if (typeof enableIllustrations !== "boolean") return this.error("INVALID_ILLUSTRATIONS", "enable_illustrations 必须为 true 或 false");
+      payload.enable_illustrations = enableIllustrations;
+    }
     // Add use_unified_bot flag if explicitly set via environment variable
     if (process.env.CONTEXTWEAVE_USE_UNIFIED_BOT === "true") {
       payload.use_unified_bot = true;
@@ -339,7 +343,16 @@ function normalizeAssetResult(result) {
   return result;
 }
 
+function parseIllustrations(argv) {
+  const index = argv.lastIndexOf("--enable_illustrations");
+  if (index === -1) return { value: null };
+  const option = argv[index + 1];
+  if (option === "true" || option === "false") return { value: option === "true" };
+  return { error: { status: "error", error: { code: "INVALID_ILLUSTRATIONS", message: "--enable_illustrations 必须为 true 或 false" } } };
+}
+
 module.exports = {
+  parseIllustrations,
   CWClient,
   normalizeAssetResult,
   printJson,

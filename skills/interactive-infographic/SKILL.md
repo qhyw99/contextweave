@@ -6,6 +6,8 @@ metadata: { "openclaw": { "emoji": "🧠", "requires": { "bins": ["node"] } } }
 
 # ContextWeave Skill
 
+用户要求「交错配图」时，生成命令传 `--enable_illustrations true`。新图默认关闭，编辑命令 `edit_contextweave.cjs` 省略此参数即继承；显式传 `--enable_illustrations true` 启用，传 `--enable_illustrations false` 关闭并保留素材缓存。
+
 本 Skill 的定位是“绘图请求客户端”，负责把用户需求转换为可执行的绘图意图，并通过基于文件生成的单一路径与后端协同完成产出。
 
 ## 哲学层

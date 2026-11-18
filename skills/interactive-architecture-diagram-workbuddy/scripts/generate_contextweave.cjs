@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 const { validateAuthoringArgs, validateAuthoringResult, saveAuthoringArtifacts } = require("./authoring.cjs");
-const { CWClient, normalizeAssetResult, downloadAssetsLocally, printJson } = require("./cw_client.cjs");
+const { CWClient, parseIllustrations, normalizeAssetResult, downloadAssetsLocally, printJson } = require("./cw_client.cjs");
 
 function parseArgs(argv) {
   const args = {};
@@ -74,6 +74,12 @@ async function main(argv = process.argv.slice(2), Client = CWClient) {
   const userRequest = args["--user_request"] || args["-u"];
   const inputFile = args["--input_file"] || args["-i"];
   const cwSourceFile = args["--cw_source_file"];
+  const { value: enableIllustrations, error: illustrationError } = parseIllustrations(argv);
+  if (illustrationError) {
+    printJson(illustrationError);
+    process.exitCode = 1;
+    return;
+  }
   const enablePlan = args["--enable_plan"] === "true";
   const outlineFile = args["--outline_file"];
   const authoringFile = args["--authoring_file"];
@@ -149,6 +155,7 @@ async function main(argv = process.argv.slice(2), Client = CWClient) {
     inputFile,
     cwSourceFile,
     enablePlan,
+    enableIllustrations,
     outlineFile,
     diagramType,
     authoringFile,

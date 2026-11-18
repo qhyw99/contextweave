@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-const { CWClient, normalizeAssetResult, printJson } = require("./cw_client.cjs");
+const { CWClient, parseIllustrations, normalizeAssetResult, printJson } = require("./cw_client.cjs");
 
 function parseArgs(argv) {
   const args = {};
@@ -41,8 +41,14 @@ function normalizeEditResult(result) {
   return result;
 }
 
-async function main() {
-  const args = parseArgs(process.argv.slice(2));
+async function main(argv = process.argv.slice(2), Client = CWClient) {
+  const args = parseArgs(argv);
+  const { value: enableIllustrations, error: illustrationError } = parseIllustrations(argv);
+  if (illustrationError) {
+    printJson(illustrationError);
+    process.exitCode = 1;
+    return;
+  }
   const sessionId = args["--session_id"] || args["-s"];
   const inputFile = args["--input_file"] || args["-i"];
   if (!sessionId || !inputFile) {
@@ -58,9 +64,10 @@ async function main() {
     process.exit(1);
   }
 
-  const client = new CWClient();
+  const client = new Client();
   const result = normalizeEditResult(
     await client.runGeneration({
+      enableIllustrations,
       inputFile,
       sessionId,
     })
@@ -85,4 +92,5 @@ async function main() {
   }
 }
 
-main();
+module.exports = { main };
+if (require.main === module) main();

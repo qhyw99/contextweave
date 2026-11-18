@@ -593,7 +593,7 @@ class CWClient {
     }
   }
 
-  async runGeneration({ userRequest, annotationsFile = null, basePalette = null, useDefaultPalette = false, accentTargets = null, morphology = null, diagramType = null, outlineFile = null, coDesignRevision = null, coDesignEditPaths = null, coDesignUpstreamUsage = null, authoringFile = null, templateScenario = null, inputFile = null, cwSourceFile = null, sessionId = null, inputSequence = null, validateRequestLength = false, diagramStyle = null, enablePlan = false, n = 1, topK = 1, tokenLimit = null }) {
+  async runGeneration({ userRequest, annotationsFile = null, basePalette = null, useDefaultPalette = false, accentTargets = null, morphology = null, diagramType = null, outlineFile = null, coDesignRevision = null, coDesignEditPaths = null, coDesignUpstreamUsage = null, authoringFile = null, templateScenario = null, inputFile = null, cwSourceFile = null, sessionId = null, inputSequence = null, validateRequestLength = false, diagramStyle = null, enableIllustrations = null, enablePlan = false, n = 1, topK = 1, tokenLimit = null }) {
     if (templateScenario != null && !authoringFile) return this.error("TEMPLATE_SCENARIO_INPUT_REQUIRED", "template_scenario 需要待校验的 authoring_file");
     if (authoringFile && cwSourceFile) return this.error("AUTHORING_OPTION_CONFLICT", "authoring_file 不能与 cw_source_file 同时使用");
     const payload = {
@@ -606,6 +606,10 @@ class CWClient {
       top_k: topK,
       wrap_svg_in_html: false,
     };
+    if (enableIllustrations !== null) {
+      if (typeof enableIllustrations !== "boolean") return this.error("INVALID_ILLUSTRATIONS", "enable_illustrations 必须为 true 或 false");
+      payload.enable_illustrations = enableIllustrations;
+    }
     if (tokenLimit !== null) payload.token_limit = tokenLimit;
     if (basePalette !== null) {
       const normalized = validateBasePalette(basePalette);
@@ -1029,7 +1033,16 @@ async function downloadAssetsLocally(result, client = null, receiptToken = null)
   return result;
 }
 
+function parseIllustrations(argv) {
+  const index = argv.lastIndexOf("--enable_illustrations");
+  if (index === -1) return { value: null };
+  const option = argv[index + 1];
+  if (option === "true" || option === "false") return { value: option === "true" };
+  return { error: { status: "error", error: { code: "INVALID_ILLUSTRATIONS", message: "--enable_illustrations 必须为 true 或 false" } } };
+}
+
 module.exports = {
+  parseIllustrations,
   CWClient,
   normalizeAssetResult,
   downloadAssetsLocally,

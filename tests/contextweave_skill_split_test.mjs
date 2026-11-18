@@ -66,7 +66,9 @@ const freeSkill = fs.readFileSync(path.join(freeRoot, "SKILL.md"), "utf8");
 assert.match(paidSkill, /^name: interactive-architecture-diagram-pay$/m);
 assert.match(paidSkill, /^slug: contextweave-interactive-architecture-pay$/m);
 assert.match(paidSkill, /^displayName: 架构图一键生成（支付宝付费版）$/m);
-assert.match(paidSkill, /^version: 1\.1\.2$/m);
+const paidVersion = JSON.parse(fs.readFileSync(path.join(paidRoot, "_meta.json"), "utf8")).version;
+assert.match(paidVersion, /^\d+\.\d+\.\d+$/);
+assert.equal(paidSkill.match(/^version: ([^\s]+)$/m)?.[1], paidVersion);
 assert.match(paidSkill, /每次 AI 生成或 AI 修改固定收费 `0\.05 CNY`/);
 assert.equal(
   markdownSection(paidSkill, "## 一、三条不变式", "## 二、普通单图"),
