@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 const { validateAuthoringArgs, validateAuthoringResult, saveAuthoringArtifacts } = require("./authoring.cjs");
-const { CWClient, parseIllustrations, normalizeAssetResult, downloadAssetsLocally, printJson } = require("./cw_client.cjs");
+const { CWClient, parseDrawingOptions, normalizeAssetResult, downloadAssetsLocally, printJson } = require("./cw_client.cjs");
 
 function parseArgs(argv) {
   const args = {};
@@ -47,9 +47,9 @@ async function main(argv = process.argv.slice(2), Client = CWClient) {
   const args = parseArgs(argv);
   const authoringError = validateAuthoringArgs(args);
   if (authoringError) { printJson(authoringError); process.exit(1); }
-  const { value: enableIllustrations, error: illustrationError } = parseIllustrations(argv);
-  if (illustrationError) {
-    printJson(illustrationError);
+  const drawing = parseDrawingOptions(argv);
+  if (drawing.error) {
+    printJson(drawing.error);
     process.exitCode = 1;
     return;
   }
@@ -90,7 +90,7 @@ async function main(argv = process.argv.slice(2), Client = CWClient) {
     return originalRequest(endpoint, payload, options);
   };
 
-  const rawResult = await client.runGeneration({ annotationsFile: args["--annotations_file"], userRequest, inputFile, cwSourceFile, authoringFile, sessionId, basePalette, enableIllustrations });
+  const rawResult = await client.runGeneration({ annotationsFile: args["--annotations_file"], userRequest, inputFile, cwSourceFile, authoringFile, sessionId, basePalette, ...drawing.value });
   const result = normalizeEditResult(authoringFile ? validateAuthoringResult(rawResult, "svg") : rawResult, Boolean(authoringFile));
   await saveAuthoringArtifacts(client, result, { outputName, outputDir, saveSource: true });
 

@@ -111,6 +111,10 @@ node scripts/generate_contextweave.cjs --input_file "<绝对路径>" --output_na
 
 - `input_file` 必须存在且为绝对路径。
 - 用户要求「交错配图」时传 `--enable_illustrations true`，CW 在连线前将底图、容器图与节点插画绑定到相应对象。新图默认关闭。编辑命令 `edit_contextweave.cjs` 省略此参数即继承；显式传 `--enable_illustrations true` 启用，传 `--enable_illustrations false` 关闭并保留素材缓存。
+- 生成和编辑均可用 `--canvas_aspect` 调整画幅。`16:9` 适合宽屏演示，`4:3` 和 `3:2` 适合横向图，`1:1` 适合方图，`2:3` 和 `3:4` 适合纵向图文，`9:16` 适合手机竖屏，`a4_portrait` 和 `a4_landscape` 分别用于 A4 纵向和横向打印。
+- 自定义画布时成对传 `--target_width`（320–10000）和 `--target_height`（240–10000）整数像素，同时给出预设时宽高比须在 1% 相对容差内。`--min_font_size` 接受 1–100 的数值，例如 `9.5`。编辑省略画幅和字号时沿用会话设置。
+- `--visual_style` 支持 `auto`（按内容选择）、`default`（标准）、`scientific_editorial`（科学插画风格）和 `scientific_omics`（组学图）。`--style_ink "#13766B"` 可指定科学插画风格的连线墨色，格式为 `#RRGGBB`。编辑省略画风或墨色时沿用相应设置，配图开关独立控制图片生成。
+- 交错配图模式（`--enable_illustrations true`，或编辑继承已开启的配图）按普通模式的 **2 倍**消耗额度。成功交付配图扣 2 次，失败或仅交付未验收草稿自动全额返还 2 次。自动选为白底且没有使用图片时，成功交付扣 1 次并退回差额。仅用原生布局或动态画幅且关闭配图，成功交付扣 1 次。
 - `output_name` 必填，例如 `order_payment_flow`。
 - `user_request` 默认长度为 50-5000 字符，可由 `CONTEXTWEAVE_MIN_REQUEST_LENGTH` / `CONTEXTWEAVE_MAX_REQUEST_LENGTH` 调整。
 - 已确定的呈现逻辑、构图范式和精确配色必须按第三节显式传参。

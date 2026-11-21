@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const { CWClient, downloadAssetsLocally, normalizeAssetResult, parseIllustrations } = require("./cw_client.cjs");
+const { CWClient, downloadAssetsLocally, normalizeAssetResult, parseDrawingOptions } = require("./cw_client.cjs");
 const { saveAuthoringArtifacts } = require("./authoring.cjs");
 
 export const DEFAULT_RESOURCE_URL = "https://pptx.chenxitech.site/a2m/run";
@@ -590,7 +590,7 @@ async function finalizeResult(stateDir, state, generationResult, tradeNo) {
 
 async function probe(rawArgs) {
   const generateArgs = forwardedGenerateArgs(rawArgs);
-  const { error } = parseIllustrations(generateArgs);
+  const { error } = parseDrawingOptions(generateArgs);
   if (error) {
     outputJson(error);
     process.exitCode = 1;

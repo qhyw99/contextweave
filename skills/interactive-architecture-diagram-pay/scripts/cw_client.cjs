@@ -686,10 +686,13 @@ class CWClient {
     }
   }
 
-  async runGeneration({ userRequest, annotationsFile = null, diagramType = null, outlineFile = null, coDesignRevision = null, coDesignEditPaths = null, coDesignUpstreamUsage = null, authoringFile = null, templateScenario = null, inputFile = null, cwSourceFile = null, sessionId = null, inputSequence = null, validateRequestLength = false, diagramStyle = null, morphology = null, accentTargets = null, basePalette = null, useDefaultPalette = false, enableIllustrations = null, enablePlan = false, n = 1, topK = 1, tokenLimit = null }) {
+  async runGeneration({ userRequest, annotationsFile = null, diagramType = null, outlineFile = null, coDesignRevision = null, coDesignEditPaths = null, coDesignUpstreamUsage = null, authoringFile = null, templateScenario = null, inputFile = null, cwSourceFile = null, sessionId = null, inputSequence = null, validateRequestLength = false, diagramStyle = null, morphology = null, accentTargets = null, basePalette = null, useDefaultPalette = false, enableIllustrations = null, canvasOptions = {}, enablePlan = false, n = 1, topK = 1, tokenLimit = null }) {
     if (templateScenario != null && !authoringFile) return this.error("TEMPLATE_SCENARIO_INPUT_REQUIRED", "template_scenario 需要待校验的 authoring_file");
     if (authoringFile && cwSourceFile) return this.error("AUTHORING_OPTION_CONFLICT", "authoring_file 不能与 cw_source_file 同时使用");
+    const canvas = normalizeCanvasOptions(canvasOptions);
+    if (canvas.error) return canvas.error;
     const payload = {
+      ...canvas.value,
       input_sequence: inputSequence,
       export_svg: true,
       export_pptx: false,
@@ -1084,6 +1087,80 @@ async function downloadAssetsLocally(result, client = null, receiptToken = null)
   return result;
 }
 
+const CANVAS_PRESETS = {
+  "16:9": [1600, 900], "4:3": [1200, 900], "1:1": [1000, 1000],
+  "2:3": [700, 1050], "3:4": [900, 1200], "3:2": [1500, 1000],
+  "9:16": [900, 1600], a4_portrait: [840, 1188], a4_landscape: [1188, 840],
+};
+const VISUAL_STYLES = ["auto", "default", "scientific_editorial", "scientific_omics"];
+const CANVAS_FIELDS = ["canvas_aspect", "target_width", "target_height", "min_font_size", "visual_style", "style_ink"];
+
+function invalidOption(code, message) {
+  return { error: { status: "error", error: { code, message } } };
+}
+
+function normalizeCanvasOptions(options) {
+  const value = {};
+  if (options.canvas_aspect !== undefined) {
+    const aspect = typeof options.canvas_aspect === "string"
+      ? options.canvas_aspect.trim().toLowerCase().replace(/\s*[:：]\s*/g, ":") : "";
+    if (!Object.hasOwn(CANVAS_PRESETS, aspect)) {
+      return invalidOption("INVALID_CANVAS", "--canvas_aspect 支持 " + Object.keys(CANVAS_PRESETS).join(", "));
+    }
+    value.canvas_aspect = aspect;
+  }
+  if ((options.target_width === undefined) !== (options.target_height === undefined)) {
+    return invalidOption("INVALID_CANVAS", "--target_width 与 --target_height 必须成对提供");
+  }
+  for (const [field, min, max] of [["target_width", 320, 10000], ["target_height", 240, 10000], ["min_font_size", 1, 100]]) {
+    if (options[field] === undefined) continue;
+    const raw = options[field];
+    const integer = field !== "min_font_size";
+    const syntax = integer ? /^\+?\d+$/ : /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i;
+    const literal = typeof raw === "number" || typeof raw === "string" ? String(raw).trim() : "";
+    const number = Number(literal);
+    if (!syntax.test(literal) || !Number.isFinite(number) || number < min || number > max) {
+      return invalidOption("INVALID_CANVAS", "--" + field + " 必须是 " + min + ".." + max + " 范围内的" + (integer ? "整数" : "数字"));
+    }
+    value[field] = number;
+  }
+  if (value.canvas_aspect && value.target_width !== undefined) {
+    const [width, height] = CANVAS_PRESETS[value.canvas_aspect];
+    const expected = width / height;
+    const actual = value.target_width / value.target_height;
+    // Match canvas.py's math.isclose(rel_tol=.01) on both sides of the preset.
+    if (Math.abs(actual - expected) > 0.01 * Math.max(actual, expected)) {
+      return invalidOption("INVALID_CANVAS", "目标宽高比与 --canvas_aspect 不一致");
+    }
+  }
+  if (options.visual_style !== undefined) {
+    if (!VISUAL_STYLES.includes(options.visual_style)) {
+      return invalidOption("INVALID_VISUAL_STYLE", "--visual_style 支持 " + VISUAL_STYLES.join(", "));
+    }
+    value.visual_style = options.visual_style;
+  }
+  if (options.style_ink !== undefined) {
+    if (typeof options.style_ink !== "string" || !/^#[0-9a-f]{6}$/i.test(options.style_ink)) {
+      return invalidOption("INVALID_STYLE_INK", "--style_ink 必须为 #RRGGBB");
+    }
+    value.style_ink = options.style_ink;
+  }
+  return { value };
+}
+
+function parseDrawingOptions(argv) {
+  const illustrations = parseIllustrations(argv);
+  if (illustrations.error) return illustrations;
+  const options = {};
+  for (const field of CANVAS_FIELDS) {
+    const index = argv.lastIndexOf("--" + field);
+    if (index !== -1) options[field] = argv[index + 1] ?? "";
+  }
+  const canvas = normalizeCanvasOptions(options);
+  if (canvas.error) return canvas;
+  return { value: { enableIllustrations: illustrations.value, canvasOptions: canvas.value } };
+}
+
 function parseIllustrations(argv) {
   const index = argv.lastIndexOf("--enable_illustrations");
   if (index === -1) return { value: null };
@@ -1094,6 +1171,7 @@ function parseIllustrations(argv) {
 
 module.exports = {
   parseIllustrations,
+  parseDrawingOptions,
   CWClient,
   normalizeAssetResult,
   downloadAssetsLocally,

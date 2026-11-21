@@ -2,6 +2,10 @@
 
 ## 已生成内容但未通过验收
 
+交错配图模式（`--enable_illustrations true`，或编辑继承已开启的配图）按普通模式的 **2 倍**消耗额度。成功交付配图扣 2 次，失败或仅交付未验收草稿自动全额返还 2 次。自动选为白底且没有使用图片时，成功交付扣 1 次并退回差额。仅用原生布局或动态画幅且关闭配图，成功交付扣 1 次。
+
+`INVALID_CANVAS`、`INVALID_VISUAL_STYLE` 和 `INVALID_STYLE_INK` 在本地校验时返回，此时额度未预占。修正参数后可重新提交。
+
 `status=error` 或退出码 1 不代表没有生成内容。检查 `saved_artifacts`、`saved_svg_file` 和 `saved_pptx_file`，交付已保存文件链接，并说明质量问题与 `receipt.quota.status`。PPTX 导出失败时仍交付实际已有的 SVG 或生成源。`editable=false` 的只读候选不能自动导入正式会话或称为正式成品。
 
 权威终态回执不自动重新生成，5xx 也遵循这一例外。下载失败须说明尚未本地保存，保留回执并通过 `query_request.cjs` 找回；查询不扣次。分片未完整合并时说明缺失。不要把 Key/token 放进链接或聊天。同号只回放；继续生成使用新请求，只有恢复动作允许且预算有效时才携带返回 session 和 `--co_design_revision`。取消后只交付已有材料，无生成内容时不把输入当输出。
